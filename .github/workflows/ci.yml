@@ -1,0 +1,60 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir_version: '1.18'
+            otp_version: '27.2'
+            lint: true
+          - elixir_version: '1.17'
+            otp_version: '27.0'
+          - elixir_version: '1.16'
+            otp_version: '26'
+          - elixir_version: '1.15'
+            otp_version: '25'
+
+    name: Elixir ${{ matrix.elixir_version}} - OTP ${{ matrix.otp_version }} ${{ matrix.lint && '- Lint' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir_version }}
+          otp-version: ${{ matrix.otp_version }}
+
+      - name: Caching
+        id: cache-deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+
+          key: ${{ runner.os }}-mix-${{ matrix.elixir_version }}-${{ matrix.otp_version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ matrix.elixir_version }}-${{ matrix.otp_version }}-
+
+      - run: mix deps.get --check-locked
+
+      - run: mix compile --warnings-as-errors
+        if: ${{ matrix.lint }}
+
+      - run: mix test
+
+      - run: mix format --check-formatted
+        if: ${{ matrix.lint }}
+
+      - name: Run credo
+        run: mix credo --only warning
+        if: ${{ matrix.lint }}
+
+      - run: mix deps.unlock --check-unused
+        if: ${{ matrix.lint }}
