@@ -14,8 +14,7 @@ defmodule Homeassistant.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Homeassistant.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
@@ -25,10 +24,7 @@ defmodule Homeassistant.MixProject do
       {:ex_doc, "~> 0.38", only: :dev},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:jason, "~> 1.4"},
-      {:emqtt,
-       github: "emqx/emqtt",
-       ref: "d919c0d91fa109d0d74a6fe71d8f44eb05a48337",
-       system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}
+      {:emqtt, github: "emqx/emqtt", tag: "1.14.4", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}
     ]
   end
 end

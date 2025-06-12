@@ -2,14 +2,50 @@
 
 ```elixir
 Mix.install([
-  {:homeassistant_ex,  path: __DIR__}
+  {:homeassistant_ex, path: __DIR__},
+  {:kino, "~> 0.16.0"}
 ])
 ```
 
 ## Section
 
 ```elixir
-Homeassistant.Client.connect()
+defmodule MySwitch do
+  use Homeassistant.Entity.Switch, name: "my-switch"
+
+  def handle_on(state) do
+    IO.puts "Switch turned on"
+    {:noreply, state}
+  end
+
+    def handle_off(state) do
+    IO.puts "Switch turned off"
+    {:noreply, state}
+  end
+
+  def handle_state(payload, state) do
+    IO.puts "New message for MySwitch: #{payload}"
+    {:noreply, state}
+  end
+end
+```
+
+```elixir
+Logger.put_application_level(:emqtt, :info)
+```
+
+```elixir
+{:ok, pid} = Homeassistant.Supervisor.start_link([entities: [MySwitch]])
+```
+
+```elixir
+measurement = "OFF"
+Homeassistant.Client.publish(MySwitch.state_topic(), measurement)
+```
+
+```elixir
+measurement = "ON"
+Homeassistant.Client.publish(MySwitch.state_topic(), measurement)
 ```
 
 ```elixir
