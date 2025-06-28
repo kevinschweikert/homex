@@ -4,20 +4,15 @@ defmodule Homeassistant.Supervisor do
   use Supervisor
 
   def start_link(init_arg) do
-    Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+    {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
+    Supervisor.start_link(__MODULE__, rest, name: name)
   end
 
   @impl Supervisor
-  def init(init_arg \\ []) do
-    emqtt_opts =
-      Keyword.get(init_arg, :emqtt, [])
-
-    entities = Keyword.get(init_arg, :entities, [])
-
+  def init(opts \\ []) do
     children = [
       {DynamicSupervisor, name: Homeassistant.EntitySupervisor, strategy: :one_for_one},
-      {DynamicSupervisor, name: Homeassistant.MQTTSupervisor, strategy: :one_for_one},
-      {Homeassistant.Manager, [emqtt: emqtt_opts, entities: entities]}
+      {Homeassistant.Manager, opts}
     ]
 
     opts = [strategy: :one_for_one, name: __MODULE__]

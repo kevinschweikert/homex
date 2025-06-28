@@ -40,12 +40,12 @@ Logger.put_application_level(:emqtt, :info)
 
 ```elixir
 measurement = "OFF"
-Homeassistant.Client.publish(MySwitch.state_topic(), measurement)
+Homeassistant.Client.publish(Homeassistant.EMQTT, MySwitch.command_topic(), measurement)
 ```
 
 ```elixir
 measurement = "ON"
-Homeassistant.Client.publish(MySwitch.state_topic(), measurement)
+Homeassistant.Client.publish(Homeassistant.EMQTT, MySwitch.command_topic(), measurement)
 ```
 
 ```elixir

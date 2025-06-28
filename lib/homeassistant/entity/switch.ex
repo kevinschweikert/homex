@@ -8,8 +8,8 @@ defmodule Homeassistant.Entity.Switch do
       @name opts[:name]
       @state_topic "homeassistant/switch/#{Homeassistant.entity_id(@name)}"
       @command_topic "homeassistant/switch/#{Homeassistant.entity_id(@name)}/set"
-      @on_payload "ON"
-      @off_payload "OFF"
+      @on_payload Keyword.get(opts, :on_payload, "ON")
+      @off_payload Keyword.get(opts, :off_payload, "OFF")
 
       use GenServer
 
@@ -19,6 +19,10 @@ defmodule Homeassistant.Entity.Switch do
 
       def entity_id do
         Homeassistant.entity_id(@name)
+      end
+
+      def subscriptions do
+        [@command_topic]
       end
 
       def state_topic() do
@@ -55,20 +59,20 @@ defmodule Homeassistant.Entity.Switch do
       end
 
       @impl GenServer
-      def handle_info({@state_topic, @on_payload}, state) do
+      def handle_info({@command_topic, @on_payload}, state) do
         handle_on(state)
       end
 
-      def handle_info({@state_topic, @off_payload}, state) do
+      def handle_info({@command_topic, @off_payload}, state) do
         handle_off(state)
-      end
-
-      def handle_info({@state_topic, payload}, state) do
-        handle_state(payload, state)
       end
 
       def handle_info({@command_topic, payload}, state) do
         handle_command(payload, state)
+      end
+
+      def handle_info({@state_topic, payload}, state) do
+        handle_state(payload, state)
       end
 
       def handle_on(state) do

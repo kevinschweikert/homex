@@ -3,35 +3,35 @@ defmodule Homeassistant.Client do
   The MQTT client
   """
 
-  def name() do
-    Homeassistant.EMQTT
+  def start_link(opts) do
+    :emqtt.start_link(opts)
   end
 
-  def connect do
-    :emqtt.connect(name())
+  def connect(server) do
+    :emqtt.connect(server)
   end
 
-  def disconnect do
-    :emqtt.disconnect(name())
+  def disconnect(server) do
+    :emqtt.disconnect(server)
   end
 
-  def publish(topic, payload, opts \\ [])
+  def publish(server, topic, payload, opts \\ [])
 
-  def publish(topic, payload, opts) when is_binary(payload) do
-    :emqtt.publish(name(), topic, payload, opts)
+  def publish(server, topic, payload, opts) when is_binary(payload) do
+    :emqtt.publish(server, topic, payload, opts)
   end
 
-  def publish(topic, payload, opts) do
+  def publish(server, topic, payload, opts) do
     with {:ok, data} <- Jason.encode(payload) do
-      :emqtt.publish(name(), topic, data, opts)
+      :emqtt.publish(server, topic, data, opts)
     end
   end
 
-  def subscribe(topic) do
-    :emqtt.subscribe(name(), topic)
+  def subscribe(server, topic) do
+    :emqtt.subscribe(server, topic)
   end
 
-  def unsubscribe(topic) do
-    :emqtt.unsubscribe(name(), topic)
+  def unsubscribe(server, topic) do
+    :emqtt.unsubscribe(server, topic)
   end
 end
