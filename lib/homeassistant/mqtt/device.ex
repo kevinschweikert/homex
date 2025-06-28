@@ -21,7 +21,6 @@ defmodule Homeassistant.MQTT.Device do
           via_device: String.t()
         }
 
-  @derive Jason.Encoder
   @enforce_keys [:identifiers]
   defstruct [
     :configuration_url,
