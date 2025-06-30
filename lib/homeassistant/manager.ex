@@ -1,6 +1,9 @@
 defmodule Homeassistant.Manager do
   use GenServer
 
+  alias Homeassistant.Origin
+  alias Homeassistant.Device
+
   require Logger
 
   defstruct [
@@ -10,40 +13,6 @@ defmodule Homeassistant.Manager do
     subscriptions: [],
     entities: []
   ]
-
-  alias Homeassistant.MQTT.{Device, Origin, Component}
-
-  def config(components) do
-    %Homeassistant.MQTT{
-      device: %Device{
-        identifiers: ["1234foo_device"],
-        name: "Example Device",
-        manufacturer: "Elixir",
-        model: "Livebook",
-        serial_number: "123456789",
-        sw_version: "1.0",
-        hw_version: "0.1"
-      },
-      origin: %Origin{
-        sw_version: "0.1.0",
-        name: "homeassistant_ex",
-        support_url: "http://localhost"
-      },
-      components: components,
-      qos: 1
-    }
-  end
-
-  defp emqtt_defaults,
-    do: [
-      name: Homeassistant.EMQTT,
-      reconnect: :infinity,
-      owner: self(),
-      host: ~c"localhost",
-      port: 1883,
-      username: ~c"admin",
-      password: ~c"admin"
-    ]
 
   def start_link(init_arg) do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
@@ -146,5 +115,46 @@ defmodule Homeassistant.Manager do
   def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
     Logger.warning("emqtt disconnected")
     {:noreply, %{state | connected: false}}
+  end
+
+  def device do
+    %Device{
+      identifiers: ["1234foo_device"],
+      name: "Example Device",
+      manufacturer: "Elixir",
+      model: "Livebook",
+      serial_number: "123456789",
+      sw_version: "1.0",
+      hw_version: "0.1"
+    }
+  end
+
+  defp origin do
+    %Origin{
+      sw_version: "0.1.0",
+      name: "homeassistant_ex",
+      support_url: "http://localhost"
+    }
+  end
+
+  defp config(components) do
+    %{
+      device: device(),
+      origin: origin(),
+      components: components,
+      qos: 1
+    }
+  end
+
+  defp emqtt_defaults do
+    [
+      name: Homeassistant.EMQTT,
+      reconnect: :infinity,
+      owner: self(),
+      host: ~c"localhost",
+      port: 1883,
+      username: ~c"admin",
+      password: ~c"admin"
+    ]
   end
 end

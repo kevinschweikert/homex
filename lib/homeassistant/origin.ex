@@ -9,11 +9,19 @@ defmodule Homeassistant.MQTT.Origin do
           support_url: String.t() | URI.t()
         }
 
-  @derive Jason.Encoder
-
+  @enforce_keys [:name]
   defstruct [
     :name,
     :sw_version,
     :support_url
   ]
+
+  defimpl Jason.Encoder do
+    def encode(value, opts) do
+      value
+      |> Map.from_struct()
+      |> Map.reject(fn {k, v} -> k not in [:identifiers] and is_nil(v) end)
+      |> Jason.Encode.map(opts)
+    end
+  end
 end
