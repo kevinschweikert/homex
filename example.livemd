@@ -46,37 +46,3 @@ Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
 measurement = "ON"
 Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
 ```
-
-```elixir
-alias Homeassistant.MQTT.{Device, Origin, Component}
-
-config = %Homeassistant.MQTT{
-  device: %Device{
-    identifiers: ["1234foo_device"],
-    name: "Example Device",
-    manufacturer: "Elixir",
-    model: "Livebook",
-    serial_number: "123456789",
-    sw_version: "1.0",
-    hw_version: "0.1"
-  },
-  origin: %Origin{
-    sw_version: "0.1.0",
-    name: "homeassistant_ex",
-    support_url: "http://localhost"
-  },
-  components: %{"foo" => %Component{
-      platform: "sensor",
-      device_class: "humidity",
-      unit_of_measurement: "%",
-      value_template: "{{ value_json.humidity }}",
-      unique_id: "hum_01"
-  }},
-  state_topic: "/some/state/topic",
-  command_topic: "/some/command/topic",
-  encoding: "json",
-  qos: 1
-}
-
-Homeassistant.Manager.publish("homeassistant/device/1234foo/config", config)
-```

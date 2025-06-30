@@ -58,7 +58,7 @@ defmodule Homeassistant.Manager do
 
     components =
       for module <- entities, into: %{} do
-        {module.entity_id, module.config()}
+        {module.entity_id(), module.config()}
       end
 
     device =
