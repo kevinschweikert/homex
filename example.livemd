@@ -2,14 +2,49 @@
 
 ```elixir
 Mix.install([
-  {:homeassistant_ex,  path: __DIR__}
+  {:homeassistant_ex, path: __DIR__},
+  {:kino, "~> 0.16.0"}
 ])
 ```
 
 ## Section
 
 ```elixir
-Homeassistant.Client.connect()
+defmodule MySwitch do
+  use Homeassistant.Entity.Switch, name: "my-switch"
+
+  def handle_on(state) do
+    IO.puts "Switch turned on"
+    {:noreply, state}
+  end
+
+    def handle_off(state) do
+    IO.puts "Switch turned off"
+    {:noreply, state}
+  end
+
+  def handle_update(state) do
+    {:reply, :rand.uniform(100), state}
+  end
+end
+```
+
+```elixir
+Logger.put_application_level(:emqtt, :info)
+```
+
+```elixir
+{:ok, pid} = Homeassistant.start_link([entities: [MySwitch]])
+```
+
+```elixir
+measurement = "OFF"
+Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
+```
+
+```elixir
+measurement = "ON"
+Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
 ```
 
 ```elixir
@@ -43,10 +78,5 @@ config = %Homeassistant.MQTT{
   qos: 1
 }
 
-Homeassistant.Client.publish("homeassistant/device/1234foo/config", config)
-```
-
-```elixir
-measurement = %{humidity: 69}
-Homeassistant.Client.publish("/some/state/topic", measurement)
+Homeassistant.Manager.publish("homeassistant/device/1234foo/config", config)
 ```
