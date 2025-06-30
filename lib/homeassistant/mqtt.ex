@@ -18,8 +18,6 @@ defmodule Homeassistant.MQTT do
           encoding: String.t()
         }
 
-  @derive Jason.Encoder
-
   defstruct [
     :device,
     :origin,
@@ -30,4 +28,13 @@ defmodule Homeassistant.MQTT do
     :qos,
     encoding: "utf-8"
   ]
+
+  defimpl Jason.Encoder do
+    def encode(value, opts) do
+      value
+      |> Map.from_struct()
+      |> Map.reject(fn {k, v} -> k not in [:identifiers] and is_nil(v) end)
+      |> Jason.Encode.map(opts)
+    end
+  end
 end

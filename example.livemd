@@ -24,7 +24,7 @@ defmodule MySwitch do
   end
 
   def handle_update(state) do
-    {:reply, :rand.uniform(100), state}
+    {:reply, Enum.random(["ON", "OFF"]), state}
   end
 end
 ```

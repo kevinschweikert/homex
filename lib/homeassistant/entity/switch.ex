@@ -6,57 +6,44 @@ defmodule Homeassistant.Entity.Switch do
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
       @behaviour Homeassistant.Entity
+
       @name opts[:name]
-      @state_topic "homeassistant/switch/#{Homeassistant.entity_id(@name)}"
-      @command_topic "homeassistant/switch/#{Homeassistant.entity_id(@name)}/set"
+      @entity_id Homeassistant.entity_id(@name)
+      @unique_id Homeassistant.unique_id(@name)
+      @state_topic "homex/switch/#{Homeassistant.entity_id(@name)}"
+      @command_topic "homex/switch/#{Homeassistant.entity_id(@name)}/set"
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
       @update_interval Keyword.get(opts, :update_interval, 5000)
 
       use GenServer
 
-      def start_link(init_arg) do
-        GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
-      end
+      def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
-      def entity_id do
-        Homeassistant.entity_id(@name)
-      end
+      def entity_id, do: @entity_id
 
       @impl Homeassistant.Entity
-      def subscriptions do
-        [@command_topic]
-      end
+      def subscriptions, do: [@command_topic]
 
       @impl Homeassistant.Entity
-      def state_topic() do
-        @state_topic
-      end
+      def state_topic(), do: @state_topic
 
       @impl Homeassistant.Entity
-      def command_topic() do
-        @command_topic
-      end
+      def command_topic(), do: @command_topic
 
-      def on_payload() do
-        @on_payload
-      end
+      def on_payload(), do: @on_payload
+      def off_payload(), do: @off_payload
 
-      def off_payload() do
-        @off_payload
+      @impl Homeassistant.Entity
+      def config do
+        %{
+          platform: "switch",
+          state_topic: @state_topic,
+          command_topic: @command_topic,
+          name: @entity_id,
+          unique_id: @unique_id
+        }
       end
-
-      @enforce_keys [:name]
-      defstruct [
-        :device_class,
-        :enabled_by_default,
-        :entity_category,
-        :entity_picture,
-        :icon,
-        :name,
-        :qos,
-        :retain
-      ]
 
       @impl GenServer
       def init(_init_arg \\ []) do

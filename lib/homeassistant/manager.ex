@@ -11,6 +11,29 @@ defmodule Homeassistant.Manager do
     entities: []
   ]
 
+  alias Homeassistant.MQTT.{Device, Origin, Component}
+
+  def config(components) do
+    %Homeassistant.MQTT{
+      device: %Device{
+        identifiers: ["1234foo_device"],
+        name: "Example Device",
+        manufacturer: "Elixir",
+        model: "Livebook",
+        serial_number: "123456789",
+        sw_version: "1.0",
+        hw_version: "0.1"
+      },
+      origin: %Origin{
+        sw_version: "0.1.0",
+        name: "homeassistant_ex",
+        support_url: "http://localhost"
+      },
+      components: components,
+      qos: 1
+    }
+  end
+
   defp emqtt_defaults,
     do: [
       name: Homeassistant.EMQTT,
@@ -65,6 +88,14 @@ defmodule Homeassistant.Manager do
         Logger.debug("subscribed to #{subscription}")
       end
     end
+
+    components =
+      for module <- entities, into: %{} do
+        {module.entity_id, module.config()}
+      end
+
+    config = config(components) |> Jason.encode!()
+    :emqtt.publish(emqtt_pid, "homeassistant/device/1234foo/config", config)
 
     {:ok,
      %__MODULE__{
