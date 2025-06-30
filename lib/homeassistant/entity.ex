@@ -4,6 +4,7 @@ defmodule Homeassistant.Entity do
   @callback subscriptions() :: [String.t()]
   @callback state_topic() :: String.t()
   @callback command_topic() :: String.t()
+  @callback config() :: map()
 
   @callback initial_state() :: state()
   @callback handle_update(state()) :: {:noreply, state()} | {:reply, String.t(), state()}

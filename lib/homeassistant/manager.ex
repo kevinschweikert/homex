@@ -8,19 +8,9 @@ defmodule Homeassistant.Manager do
     :emqtt_opts,
     connected: false,
     subscriptions: [],
-    entities: []
+    entities: [],
+    config: %{}
   ]
-
-  defp emqtt_defaults,
-    do: [
-      name: Homeassistant.EMQTT,
-      reconnect: :infinity,
-      owner: self(),
-      host: ~c"localhost",
-      port: 1883,
-      username: ~c"admin",
-      password: ~c"admin"
-    ]
 
   def start_link(init_arg) do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
@@ -66,12 +56,27 @@ defmodule Homeassistant.Manager do
       end
     end
 
+    components =
+      for module <- entities, into: %{} do
+        {module.entity_id(), module.config()}
+      end
+
+    device =
+      Application.get_env(:homeassistant_ex, :device, %{})
+
+    origin =
+      Application.get_env(:homeassistant_ex, :origin, %{})
+
+    config = config(device, origin, components) |> Jason.encode!()
+    :emqtt.publish(emqtt_pid, "homeassistant/device/1234foo/config", config)
+
     {:ok,
      %__MODULE__{
        entities: entities,
        emqtt_pid: emqtt_pid,
        emqtt_opts: emqtt_opts,
-       connected: true
+       connected: true,
+       config: config
      }}
   end
 
@@ -115,5 +120,26 @@ defmodule Homeassistant.Manager do
   def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
     Logger.warning("emqtt disconnected")
     {:noreply, %{state | connected: false}}
+  end
+
+  defp config(device, origin, components) do
+    %{
+      device: device,
+      origin: origin,
+      components: components,
+      qos: 1
+    }
+  end
+
+  defp emqtt_defaults do
+    [
+      name: Homeassistant.EMQTT,
+      reconnect: :infinity,
+      owner: self(),
+      host: ~c"localhost",
+      port: 1883,
+      username: ~c"admin",
+      password: ~c"admin"
+    ]
   end
 end
