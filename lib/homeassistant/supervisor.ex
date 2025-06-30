@@ -1,4 +1,4 @@
-defmodule Homeassistant.Supervisor do
+defmodule Homex.Supervisor do
   use Supervisor
 
   def start_link(init_arg) do
@@ -9,8 +9,8 @@ defmodule Homeassistant.Supervisor do
   @impl Supervisor
   def init(opts \\ []) do
     children = [
-      {DynamicSupervisor, name: Homeassistant.EntitySupervisor, strategy: :one_for_one},
-      {Homeassistant.Manager, opts}
+      {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
+      {Homex.Manager, opts}
     ]
 
     opts = [strategy: :one_for_one, name: __MODULE__]

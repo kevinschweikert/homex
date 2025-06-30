@@ -1,4 +1,4 @@
-defmodule Homeassistant do
+defmodule Homex do
   @config_schema [
                    device: [
                      required: true,
@@ -44,17 +44,15 @@ defmodule Homeassistant do
                  |> NimbleOptions.new!()
 
   @moduledoc """
-  Documentation for `Homeassistant`.
 
-  Configuration options:
+  Documentation for `Homex`.
 
   #{NimbleOptions.docs(@config_schema)}
-
   """
 
-  defdelegate start_link(opts), to: Homeassistant.Supervisor
-  defdelegate publish(topic, payload), to: Homeassistant.Manager
-  defdelegate subscribe(topic), to: Homeassistant.Manager
+  defdelegate start_link(opts), to: Homex.Supervisor
+  defdelegate publish(topic, payload), to: Homex.Manager
+  defdelegate subscribe(topic), to: Homex.Manager
 
   def unique_id(name) do
     "#{entity_id(name)}_#{:erlang.phash2(name)}"
@@ -67,14 +65,14 @@ defmodule Homeassistant do
   end
 
   def discovery_prefix do
-    Application.get_all_env(:homeassistant_ex)
+    Application.get_all_env(:homex)
     |> NimbleOptions.validate!(@config_schema)
     |> Keyword.get(:discovery_prefix)
   end
 
   def config(components \\ %{}) do
     config =
-      Application.get_all_env(:homeassistant_ex)
+      Application.get_all_env(:homex)
       |> NimbleOptions.validate!(@config_schema)
 
     %{

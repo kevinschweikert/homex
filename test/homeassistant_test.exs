@@ -1,4 +1,4 @@
-defmodule HomeassistantTest do
+defmodule HomexTest do
   use ExUnit.Case
-  doctest Homeassistant
+  doctest Homex
 end

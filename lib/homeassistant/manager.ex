@@ -1,4 +1,4 @@
-defmodule Homeassistant.Manager do
+defmodule Homex.Manager do
   use GenServer
 
   require Logger
@@ -46,7 +46,7 @@ defmodule Homeassistant.Manager do
 
     for module <- entities do
       {:ok, _pid} =
-        DynamicSupervisor.start_child(Homeassistant.EntitySupervisor, module)
+        DynamicSupervisor.start_child(Homex.EntitySupervisor, module)
 
       Logger.info("started entity #{module.entity_id()}")
 
@@ -61,12 +61,12 @@ defmodule Homeassistant.Manager do
         {module.entity_id(), module.config()}
       end
 
-    config = Homeassistant.config(components)
+    config = Homex.config(components)
     payload = Jason.encode!(config)
 
     :emqtt.publish(
       emqtt_pid,
-      "#{Homeassistant.discovery_prefix()}/device/#{Homeassistant.entity_id(config.device.name)}/config",
+      "#{Homex.discovery_prefix()}/device/#{Homex.entity_id(config.device.name)}/config",
       payload
     )
 
@@ -124,7 +124,7 @@ defmodule Homeassistant.Manager do
 
   defp emqtt_defaults do
     [
-      name: Homeassistant.EMQTT,
+      name: Homex.EMQTT,
       reconnect: :infinity,
       owner: self(),
       host: ~c"localhost",

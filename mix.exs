@@ -1,9 +1,9 @@
-defmodule Homeassistant.MixProject do
+defmodule Homex.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :homeassistant_ex,
+      app: :homex,
       version: "0.1.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,

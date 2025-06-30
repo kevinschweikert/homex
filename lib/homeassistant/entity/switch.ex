@@ -1,17 +1,17 @@
-defmodule Homeassistant.Entity.Switch do
+defmodule Homex.Entity.Switch do
   @moduledoc """
   https://www.home-assistant.io/integrations/switch.mqtt
   """
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
-      @behaviour Homeassistant.Entity
+      @behaviour Homex.Entity
 
       @name opts[:name]
-      @entity_id Homeassistant.entity_id(@name)
-      @unique_id Homeassistant.unique_id(@name)
-      @state_topic "homex/switch/#{Homeassistant.entity_id(@name)}"
-      @command_topic "homex/switch/#{Homeassistant.entity_id(@name)}/set"
+      @entity_id Homex.entity_id(@name)
+      @unique_id Homex.unique_id(@name)
+      @state_topic "homex/switch/#{Homex.entity_id(@name)}"
+      @command_topic "homex/switch/#{Homex.entity_id(@name)}/set"
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
       @update_interval Keyword.get(opts, :update_interval, 5000)
@@ -22,19 +22,19 @@ defmodule Homeassistant.Entity.Switch do
 
       def entity_id, do: @entity_id
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def subscriptions, do: [@command_topic]
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def state_topic(), do: @state_topic
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def command_topic(), do: @command_topic
 
       def on_payload(), do: @on_payload
       def off_payload(), do: @off_payload
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def config do
         %{
           platform: "switch",
@@ -80,23 +80,23 @@ defmodule Homeassistant.Entity.Switch do
         {:noreply, state}
       end
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def initial_state() do
         %{}
       end
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def handle_update(state) do
         {:noreply, state}
       end
 
-      @impl Homeassistant.Entity
+      @impl Homex.Entity
       def handle_command(_payload, state) do
         {:noreply, state}
       end
 
       defp maybe_publish({:reply, payload, state}) do
-        Homeassistant.publish(@state_topic, payload)
+        Homex.publish(@state_topic, payload)
         {:noreply, state}
       end
 

@@ -1,6 +1,6 @@
 import Config
 
-config :homeassistant_ex,
+config :homex,
   device: [
     identifiers: ["1234foo_device"],
     name: "Example Device",
@@ -13,5 +13,6 @@ config :homeassistant_ex,
   origin: [
     name: "homex",
     sw_version: "0.1.0",
+    name: "homex",
     support_url: "http://localhost"
   ]
