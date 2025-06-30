@@ -23,9 +23,8 @@ defmodule MySwitch do
     {:noreply, state}
   end
 
-  def handle_state(payload, state) do
-    IO.puts "New message for MySwitch: #{payload}"
-    {:noreply, state}
+  def handle_update(state) do
+    {:reply, :rand.uniform(100), state}
   end
 end
 ```
@@ -35,17 +34,17 @@ Logger.put_application_level(:emqtt, :info)
 ```
 
 ```elixir
-{:ok, pid} = Homeassistant.Supervisor.start_link([entities: [MySwitch]])
+{:ok, pid} = Homeassistant.start_link([entities: [MySwitch]])
 ```
 
 ```elixir
 measurement = "OFF"
-Homeassistant.Client.publish(Homeassistant.EMQTT, MySwitch.command_topic(), measurement)
+Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
 ```
 
 ```elixir
 measurement = "ON"
-Homeassistant.Client.publish(Homeassistant.EMQTT, MySwitch.command_topic(), measurement)
+Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
 ```
 
 ```elixir
@@ -79,10 +78,5 @@ config = %Homeassistant.MQTT{
   qos: 1
 }
 
-Homeassistant.Client.publish("homeassistant/device/1234foo/config", config)
-```
-
-```elixir
-measurement = %{humidity: 69}
-Homeassistant.Client.publish("/some/state/topic", measurement)
+Homeassistant.Manager.publish("homeassistant/device/1234foo/config", config)
 ```

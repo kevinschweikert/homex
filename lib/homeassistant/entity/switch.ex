@@ -5,11 +5,13 @@ defmodule Homeassistant.Entity.Switch do
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
+      @behaviour Homeassistant.Entity
       @name opts[:name]
       @state_topic "homeassistant/switch/#{Homeassistant.entity_id(@name)}"
       @command_topic "homeassistant/switch/#{Homeassistant.entity_id(@name)}/set"
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
+      @update_interval Keyword.get(opts, :update_interval, 5000)
 
       use GenServer
 
@@ -21,14 +23,17 @@ defmodule Homeassistant.Entity.Switch do
         Homeassistant.entity_id(@name)
       end
 
+      @impl Homeassistant.Entity
       def subscriptions do
         [@command_topic]
       end
 
+      @impl Homeassistant.Entity
       def state_topic() do
         @state_topic
       end
 
+      @impl Homeassistant.Entity
       def command_topic() do
         @command_topic
       end
@@ -55,24 +60,29 @@ defmodule Homeassistant.Entity.Switch do
 
       @impl GenServer
       def init(_init_arg \\ []) do
-        {:ok, %{}}
+        :timer.send_interval(@update_interval, :update)
+        {:ok, initial_state()}
       end
 
       @impl GenServer
       def handle_info({@command_topic, @on_payload}, state) do
         handle_on(state)
+        |> maybe_publish()
       end
 
       def handle_info({@command_topic, @off_payload}, state) do
         handle_off(state)
+        |> maybe_publish()
       end
 
       def handle_info({@command_topic, payload}, state) do
         handle_command(payload, state)
+        |> maybe_publish()
       end
 
-      def handle_info({@state_topic, payload}, state) do
-        handle_state(payload, state)
+      def handle_info(:update, state) do
+        handle_update(state)
+        |> maybe_publish()
       end
 
       def handle_on(state) do
@@ -83,15 +93,26 @@ defmodule Homeassistant.Entity.Switch do
         {:noreply, state}
       end
 
-      def handle_state(payload, state) do
+      @impl Homeassistant.Entity
+      def handle_update(state) do
         {:noreply, state}
       end
 
+      @impl Homeassistant.Entity
       def handle_command(_payload, state) do
         {:noreply, state}
       end
 
-      defoverridable handle_on: 1, handle_off: 1, handle_state: 2, handle_command: 2
+      defp maybe_publish({:reply, payload, state}) do
+        Homeassistant.publish(@state_topic, payload)
+        {:noreply, state}
+      end
+
+      defp maybe_publish({:noreply, state}) do
+        {:noreply, state}
+      end
+
+      defoverridable handle_on: 1, handle_off: 1, handle_command: 2, handle_update: 1
     end
   end
 end

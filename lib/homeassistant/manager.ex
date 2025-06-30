@@ -1,21 +1,49 @@
 defmodule Homeassistant.Manager do
   use GenServer
 
-  alias Homeassistant.Client
-
   require Logger
 
   defstruct [
     :emqtt_pid,
     :emqtt_opts,
     connected: false,
-    queue: :queue.new(),
     subscriptions: [],
     entities: []
   ]
 
+  defp emqtt_defaults,
+    do: [
+      name: Homeassistant.EMQTT,
+      reconnect: :infinity,
+      owner: self(),
+      host: ~c"localhost",
+      port: 1883,
+      username: ~c"admin",
+      password: ~c"admin"
+    ]
+
   def start_link(init_arg) do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
+  end
+
+  def publish(topic, payload)
+
+  def publish(topic, payload) when is_binary(payload) do
+    do_publish(topic, payload)
+  end
+
+  def publish(topic, payload) do
+    with {:ok, payload} <- Jason.encode(payload) do
+      do_publish(topic, payload)
+    end
+  end
+
+  defp do_publish(topic, payload) do
+    GenServer.cast(__MODULE__, {:publish, topic, payload})
+  end
+
+  def subscribe(topic) do
+    GenServer.cast(__MODULE__, {:subscribe, topic})
   end
 
   @impl GenServer
@@ -23,8 +51,8 @@ defmodule Homeassistant.Manager do
     emqtt_opts = Keyword.get(init_arg, :emqtt, []) |> Keyword.merge(emqtt_defaults())
     entities = Keyword.get(init_arg, :entities, [])
 
-    {:ok, emqtt_pid} = Client.start_link(emqtt_opts)
-    {:ok, _} = Client.connect(emqtt_pid)
+    {:ok, emqtt_pid} = :emqtt.start_link(emqtt_opts)
+    {:ok, _} = :emqtt.connect(emqtt_pid)
 
     for module <- entities do
       {:ok, _pid} =
@@ -33,7 +61,7 @@ defmodule Homeassistant.Manager do
       Logger.info("started entity #{module.entity_id()}")
 
       for subscription <- module.subscriptions() do
-        {:ok, _, _} = Client.subscribe(emqtt_pid, subscription)
+        {:ok, _, _} = :emqtt.subscribe(emqtt_pid, subscription)
         Logger.debug("subscribed to #{subscription}")
       end
     end
@@ -47,6 +75,29 @@ defmodule Homeassistant.Manager do
      }}
   end
 
+  @impl GenServer
+  def handle_cast(
+        {:publish, topic, payload},
+        %__MODULE__{emqtt_pid: emqtt_pid, connected: true} = state
+      ) do
+    :emqtt.publish(emqtt_pid, topic, payload, [])
+    {:noreply, state}
+  end
+
+  def handle_cast(
+        {:subscribe, topic},
+        %__MODULE__{emqtt_pid: emqtt_pid, connected: true} = state
+      ) do
+    :emqtt.subscribe(emqtt_pid, topic)
+    {:noreply, state}
+  end
+
+  def handle_cast(_, %__MODULE__{connected: false} = state) do
+    Logger.error("emqtt not connected!")
+    {:noreply, state}
+  end
+
+  # new MQTT message from broker
   @impl GenServer
   def handle_info(
         {:publish, %{topic: topic, payload: payload}},
@@ -64,17 +115,5 @@ defmodule Homeassistant.Manager do
   def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
     Logger.warning("emqtt disconnected")
     {:noreply, %{state | connected: false}}
-  end
-
-  defp emqtt_defaults do
-    [
-      name: Homeassistant.EMQTT,
-      reconnect: :infinity,
-      owner: self(),
-      host: ~c"localhost",
-      port: 1883,
-      username: ~c"admin",
-      password: ~c"admin"
-    ]
   end
 end
