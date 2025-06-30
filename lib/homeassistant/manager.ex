@@ -1,9 +1,6 @@
 defmodule Homeassistant.Manager do
   use GenServer
 
-  alias Homeassistant.Origin
-  alias Homeassistant.Device
-
   require Logger
 
   defstruct [
@@ -11,7 +8,8 @@ defmodule Homeassistant.Manager do
     :emqtt_opts,
     connected: false,
     subscriptions: [],
-    entities: []
+    entities: [],
+    config: %{}
   ]
 
   def start_link(init_arg) do
@@ -63,7 +61,13 @@ defmodule Homeassistant.Manager do
         {module.entity_id, module.config()}
       end
 
-    config = config(components) |> Jason.encode!()
+    device =
+      Application.get_env(:homeassistant_ex, :device, %{})
+
+    origin =
+      Application.get_env(:homeassistant_ex, :origin, %{})
+
+    config = config(device, origin, components) |> Jason.encode!()
     :emqtt.publish(emqtt_pid, "homeassistant/device/1234foo/config", config)
 
     {:ok,
@@ -71,7 +75,8 @@ defmodule Homeassistant.Manager do
        entities: entities,
        emqtt_pid: emqtt_pid,
        emqtt_opts: emqtt_opts,
-       connected: true
+       connected: true,
+       config: config
      }}
   end
 
@@ -117,30 +122,10 @@ defmodule Homeassistant.Manager do
     {:noreply, %{state | connected: false}}
   end
 
-  def device do
-    %Device{
-      identifiers: ["1234foo_device"],
-      name: "Example Device",
-      manufacturer: "Elixir",
-      model: "Livebook",
-      serial_number: "123456789",
-      sw_version: "1.0",
-      hw_version: "0.1"
-    }
-  end
-
-  defp origin do
-    %Origin{
-      sw_version: "0.1.0",
-      name: "homeassistant_ex",
-      support_url: "http://localhost"
-    }
-  end
-
-  defp config(components) do
+  defp config(device, origin, components) do
     %{
-      device: device(),
-      origin: origin(),
+      device: device,
+      origin: origin,
       components: components,
       qos: 1
     }
