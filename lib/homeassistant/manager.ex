@@ -73,7 +73,7 @@ defmodule Homeassistant.Manager do
 
     :emqtt.publish(
       emqtt_pid,
-      "#{discovery_prefix}/device/#{Homassistant.entity_id(device.name)}/config",
+      "#{discovery_prefix}/device/#{Homeassistant.entity_id(device.name)}/config",
       config
     )
 
