@@ -94,6 +94,11 @@ defmodule Homeassistant.Entity.Switch do
       end
 
       @impl Homeassistant.Entity
+      def initial_state() do
+        %{}
+      end
+
+      @impl Homeassistant.Entity
       def handle_update(state) do
         {:noreply, state}
       end
@@ -112,7 +117,11 @@ defmodule Homeassistant.Entity.Switch do
         {:noreply, state}
       end
 
-      defoverridable handle_on: 1, handle_off: 1, handle_command: 2, handle_update: 1
+      defoverridable handle_on: 1,
+                     handle_off: 1,
+                     handle_command: 2,
+                     handle_update: 1,
+                     initial_state: 0
     end
   end
 end
