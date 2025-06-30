@@ -67,8 +67,15 @@ defmodule Homeassistant.Manager do
     origin =
       Application.get_env(:homeassistant_ex, :origin, %{})
 
+    discovery_prefix = Application.get_env(:homeassistant_ex, :discovery_prefix, "homeassistant")
+
     config = config(device, origin, components) |> Jason.encode!()
-    :emqtt.publish(emqtt_pid, "homeassistant/device/1234foo/config", config)
+
+    :emqtt.publish(
+      emqtt_pid,
+      "#{discovery_prefix}/device/#{Homassistant.entity_id(device.name)}/config",
+      config
+    )
 
     {:ok,
      %__MODULE__{
