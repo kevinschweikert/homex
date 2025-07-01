@@ -35,7 +35,7 @@ config :homex,
 
 ## First Entity
 
-```
+```elixir
 defmodule MySwitch do
   use Homex.Entity.Switch, name: "my-switch"
 
