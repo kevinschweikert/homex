@@ -35,6 +35,8 @@ config :homex,
 
 ## First Entity
 
+Define a module for the type of entity you want to use
+
 ```elixir
 defmodule MySwitch do
   use Homex.Entity.Switch, name: "my-switch"
@@ -51,6 +53,25 @@ defmodule MySwitch do
 
   def handle_update(state) do
     {:reply, Enum.random(["ON", "OFF"]), state}
+  end
+end
+```
+
+Add `homex` to you supervision tree
+
+```elixir
+defmodule MyApp.Application do
+
+  def start(_type, _args) do
+    children =
+      [
+        ...,
+        {Homex, enities: [MySwitch]}
+        ...
+      ]
+
+    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+    Supervisor.start_link(children, opts)
   end
 end
 ```
