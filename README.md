@@ -33,6 +33,28 @@ config :homex,
   ]
 ```
 
+## First Entity
+
+```
+defmodule MySwitch do
+  use Homex.Entity.Switch, name: "my-switch"
+
+  def handle_on(state) do
+    IO.puts("Switch turned on")
+    {:noreply, state}
+  end
+
+  def handle_off(state) do
+    IO.puts("Switch turned off")
+    {:noreply, state}
+  end
+
+  def handle_update(state) do
+    {:reply, Enum.random(["ON", "OFF"]), state}
+  end
+end
+```
+
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/homex>.
