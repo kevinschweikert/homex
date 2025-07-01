@@ -13,6 +13,5 @@ config :homex,
   origin: [
     name: "homex",
     sw_version: "0.1.0",
-    name: "homex",
     support_url: "http://localhost"
   ]

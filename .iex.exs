@@ -1,5 +1,5 @@
 defmodule MySwitch do
-  use Homeassistant.Entity.Switch, name: "my-switch"
+  use Homex.Entity.Switch, name: "my-switch"
 
   def handle_on(state) do
     IO.puts("Switch turned on")

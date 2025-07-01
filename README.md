@@ -2,9 +2,9 @@
 
 This library aims to bring Elixir (and especially Nerves) closer to Home Assistant. This is a work in progress based on the [initial idea](https://elixirforum.com/t/nerves-home-assistant-integration/70920).
 
-## TODO
+## Example
 
-- [ ] add example folder with self contained application/livebook
+There is a Livebook example [`example.livemd`](https://livebook.dev/run?url=https://raw.githubusercontent.com/kevinschweikert/homex/refs/heads/main/example.livemd) to get you started!
 
 ## Installation
 
@@ -17,6 +17,20 @@ def deps do
     {:homex, "~> 0.1.0"}
   ]
 end
+```
+
+## Configuration
+
+```elixir
+import Config
+
+config :homex,
+  device: [
+    identifiers: ["my device"],
+  ],
+  origin: [
+    name: "homex",
+  ]
 ```
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
