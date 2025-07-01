@@ -1,4 +1,4 @@
-defmodule Homeassistant.Entity do
+defmodule Homex.Entity do
   @type state() :: term()
 
   @callback subscriptions() :: [String.t()]

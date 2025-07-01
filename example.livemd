@@ -1,11 +1,11 @@
-# Homeassistant Example
+# Homex
 
 ```elixir
 Mix.install([
-  {:homeassistant_ex, path: __DIR__},
+  {:homex, path: __DIR__},
   {:kino, "~> 0.16.0"}
   ], config: [
-  homeassistant_ex: [
+  homex: [
     device: [name: "my device", identifiers: ["foo"]]
   ]
 ])
@@ -15,7 +15,7 @@ Mix.install([
 
 ```elixir
 defmodule MySwitch do
-  use Homeassistant.Entity.Switch, name: "my-switch"
+  use Homex.Entity.Switch, name: "my-switch"
 
   def handle_on(state) do
     IO.puts "Switch turned on"
@@ -38,15 +38,15 @@ Logger.put_application_level(:emqtt, :info)
 ```
 
 ```elixir
-{:ok, pid} = Homeassistant.start_link([entities: [MySwitch]])
+{:ok, pid} = Homex.start_link([entities: [MySwitch]])
 ```
 
 ```elixir
 measurement = "OFF"
-Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
+Homex.publish(MySwitch.command_topic(), measurement)
 ```
 
 ```elixir
 measurement = "ON"
-Homeassistant.Manager.publish(MySwitch.command_topic(), measurement)
+Homex.publish(MySwitch.command_topic(), measurement)
 ```
