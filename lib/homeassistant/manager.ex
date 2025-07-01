@@ -61,20 +61,13 @@ defmodule Homeassistant.Manager do
         {module.entity_id(), module.config()}
       end
 
-    device =
-      Application.get_env(:homeassistant_ex, :device, %{})
-
-    origin =
-      Application.get_env(:homeassistant_ex, :origin, %{})
-
-    discovery_prefix = Application.get_env(:homeassistant_ex, :discovery_prefix, "homeassistant")
-
-    config = config(device, origin, components) |> Jason.encode!()
+    config = Homeassistant.config(components)
+    payload = Jason.encode!(config)
 
     :emqtt.publish(
       emqtt_pid,
-      "#{discovery_prefix}/device/#{Homeassistant.entity_id(device.name)}/config",
-      config
+      "#{Homeassistant.discovery_prefix()}/device/#{Homeassistant.entity_id(config.device.name)}/config",
+      payload
     )
 
     {:ok,
@@ -127,15 +120,6 @@ defmodule Homeassistant.Manager do
   def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
     Logger.warning("emqtt disconnected")
     {:noreply, %{state | connected: false}}
-  end
-
-  defp config(device, origin, components) do
-    %{
-      device: device,
-      origin: origin,
-      components: components,
-      qos: 1
-    }
   end
 
   defp emqtt_defaults do

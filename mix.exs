@@ -21,10 +21,11 @@ defmodule Homeassistant.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.38", only: :dev},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:emqtt, github: "emqx/emqtt", tag: "1.14.4", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]},
+      {:ex_doc, "~> 0.38", only: :dev},
       {:jason, "~> 1.4"},
-      {:emqtt, github: "emqx/emqtt", tag: "1.14.4", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}
+      {:nimble_options, "~> 1.1"}
     ]
   end
 end
