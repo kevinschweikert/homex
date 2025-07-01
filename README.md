@@ -30,7 +30,8 @@ config :homex,
   ],
   origin: [
     name: "homex",
-  ]
+  ],
+  entities: [MySwitch]
 ```
 
 ## First Entity
@@ -66,7 +67,7 @@ defmodule MyApp.Application do
     children =
       [
         ...,
-        {Homex, enities: [MySwitch]}
+        Homex,
         ...
       ]
 

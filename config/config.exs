@@ -14,4 +14,5 @@ config :homex,
     name: "homex",
     sw_version: "0.1.0",
     support_url: "http://localhost"
-  ]
+  ],
+  entities: [MySwitch]

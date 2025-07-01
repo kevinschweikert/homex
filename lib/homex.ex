@@ -39,7 +39,26 @@ defmodule Homex do
                      ]
                    ],
                    discovery_prefix: [required: false, type: :string, default: "homeassistant"],
-                   qos: [required: false, type: :integer, default: 1]
+                   qos: [required: false, type: :integer, default: 1],
+                   entities: [required: true, type: {:list, :atom}],
+                   emqtt: [
+                     required: false,
+                     type: :non_empty_keyword_list,
+                     default: [
+                       reconnect: :infinity,
+                       host: "localhost",
+                       port: 1883,
+                       username: "admin",
+                       password: "admin"
+                     ],
+                     keys: [
+                       reconnect: [type: {:or, [:atom, :integer]}, default: :infinity],
+                       host: [type: :string, default: "localhost"],
+                       port: [type: :integer, default: 1883],
+                       username: [type: :string, default: "admin"],
+                       password: [type: :string, default: "admin"]
+                     ]
+                   ]
                  ]
                  |> NimbleOptions.new!()
 
@@ -50,7 +69,7 @@ defmodule Homex do
   #{NimbleOptions.docs(@config_schema)}
   """
 
-  defdelegate start_link(opts), to: Homex.Supervisor
+  defdelegate start_link(opts \\ []), to: Homex.Supervisor
   defdelegate publish(topic, payload), to: Homex.Manager
   defdelegate subscribe(topic), to: Homex.Manager
 
@@ -64,13 +83,19 @@ defmodule Homex do
     |> String.replace(~r/[^a-z0-9_]/, "_")
   end
 
+  def entities do
+    Application.get_all_env(:homex)
+    |> NimbleOptions.validate!(@config_schema)
+    |> Keyword.get(:entities)
+  end
+
   def discovery_prefix do
     Application.get_all_env(:homex)
     |> NimbleOptions.validate!(@config_schema)
     |> Keyword.get(:discovery_prefix)
   end
 
-  def config(components \\ %{}) do
+  def discovery_config(components \\ %{}) do
     config =
       Application.get_all_env(:homex)
       |> NimbleOptions.validate!(@config_schema)
@@ -81,5 +106,19 @@ defmodule Homex do
       components: components,
       qos: config[:qos]
     }
+  end
+
+  def emqtt_options do
+    config =
+      Application.get_all_env(:homex)
+      |> NimbleOptions.validate!(@config_schema)
+
+    [
+      reconnect: config[:emqtt][:reconnect],
+      host: String.to_charlist(config[:emqtt][:host]),
+      port: config[:emqtt][:port],
+      username: String.to_charlist(config[:emqtt][:username]),
+      password: String.to_charlist(config[:emqtt][:password])
+    ]
   end
 end

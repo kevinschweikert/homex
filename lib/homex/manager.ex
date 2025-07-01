@@ -9,7 +9,7 @@ defmodule Homex.Manager do
     connected: false,
     subscriptions: [],
     entities: [],
-    config: %{}
+    discovery_config: %{}
   ]
 
   def start_link(init_arg) do
@@ -37,9 +37,9 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
-  def init(init_arg \\ []) do
-    emqtt_opts = Keyword.get(init_arg, :emqtt, []) |> Keyword.merge(emqtt_defaults())
-    entities = Keyword.get(init_arg, :entities, [])
+  def init(_init_arg \\ []) do
+    emqtt_opts = Homex.emqtt_options()
+    entities = Homex.entities()
 
     {:ok, emqtt_pid} = :emqtt.start_link(emqtt_opts)
     {:ok, _} = :emqtt.connect(emqtt_pid)
@@ -61,12 +61,12 @@ defmodule Homex.Manager do
         {module.entity_id(), module.config()}
       end
 
-    config = Homex.config(components)
-    payload = Jason.encode!(config)
+    discovery_config = Homex.discovery_config(components)
+    payload = Jason.encode!(discovery_config)
 
     :emqtt.publish(
       emqtt_pid,
-      "#{Homex.discovery_prefix()}/device/#{Homex.entity_id(config.device.name)}/config",
+      "#{Homex.discovery_prefix()}/device/#{Homex.entity_id(discovery_config.device.name)}/config",
       payload
     )
 
@@ -76,7 +76,7 @@ defmodule Homex.Manager do
        emqtt_pid: emqtt_pid,
        emqtt_opts: emqtt_opts,
        connected: true,
-       config: config
+       discovery_config: discovery_config
      }}
   end
 
@@ -120,17 +120,5 @@ defmodule Homex.Manager do
   def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
     Logger.warning("emqtt disconnected")
     {:noreply, %{state | connected: false}}
-  end
-
-  defp emqtt_defaults do
-    [
-      name: Homex.EMQTT,
-      reconnect: :infinity,
-      owner: self(),
-      host: ~c"localhost",
-      port: 1883,
-      username: ~c"admin",
-      password: ~c"admin"
-    ]
   end
 end

@@ -6,7 +6,8 @@ Mix.install([
   {:kino, "~> 0.16.0"}
   ], config: [
   homex: [
-    device: [name: "my device", identifiers: ["foo"]]
+    device: [name: "my device", identifiers: ["foo"]],
+    entities: [MySwitch]
   ]
 ])
 ```
@@ -38,7 +39,7 @@ Logger.put_application_level(:emqtt, :info)
 ```
 
 ```elixir
-{:ok, pid} = Homex.start_link([entities: [MySwitch]])
+{:ok, pid} = Homex.start_link()
 ```
 
 ```elixir
