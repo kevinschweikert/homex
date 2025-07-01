@@ -11,7 +11,7 @@ config :homeassistant_ex,
     hw_version: "0.1"
   ],
   origin: [
+    name: "homex",
     sw_version: "0.1.0",
-    name: "homeassistant_ex",
     support_url: "http://localhost"
   ]
