@@ -1,30 +1,42 @@
 defmodule Homeassistant do
-  @device_schema [
-    identifiers: [required: true, type: {:list, :string}],
-    name: [required: true, type: :string],
-    manufacturer: [required: false, type: :string],
-    model: [required: false, type: :string],
-    serial_number: [required: false, type: :string],
-    sw_version: [required: false, type: :string],
-    hw_version: [required: false, type: :string]
-  ]
-
-  @origin_schema [
-    name: [required: false, type: :string, default: "homex"],
-    sw_version: [required: false, type: :string],
-    support_url: [required: false, type: :string]
-  ]
-
   @config_schema [
                    device: [
                      required: true,
-                     type: {:or, [keyword_list: @device_schema]},
-                     doc: "\n\n" <> NimbleOptions.docs(@origin_schema, nest_level: 1)
+                     type: :non_empty_keyword_list,
+                     keys: [
+                       identifiers: [required: true, type: {:list, :string}],
+                       name: [required: true, type: :string],
+                       manufacturer: [required: false, type: :string],
+                       model: [required: false, type: :string],
+                       serial_number: [required: false, type: :string],
+                       sw_version: [required: false, type: :string],
+                       hw_version: [required: false, type: :string]
+                     ]
                    ],
                    origin: [
                      required: true,
-                     type: {:or, [keyword_list: @origin_schema]},
-                     doc: "\n\n" <> NimbleOptions.docs(@origin_schema, nest_level: 1)
+                     type: :non_empty_keyword_list,
+                     keys: [
+                       name: [
+                         required: false,
+                         type: :string,
+                         default: "homex",
+                         doc:
+                           "The name of the application that is the origin of the discovered MQTT item."
+                       ],
+                       sw_version: [
+                         required: false,
+                         type: :string,
+                         doc:
+                           "Software version of the application that supplies the discovered MQTT item"
+                       ],
+                       support_url: [
+                         required: false,
+                         type: :string,
+                         doc:
+                           "Support URL of the application that supplies the discovered MQTT item"
+                       ]
+                     ]
                    ],
                    discovery_prefix: [required: false, type: :string, default: "homeassistant"],
                    qos: [required: false, type: :integer, default: 1]
@@ -60,7 +72,7 @@ defmodule Homeassistant do
     |> Keyword.get(:discovery_prefix)
   end
 
-  def config(components) do
+  def config(components \\ %{}) do
     config =
       Application.get_all_env(:homeassistant_ex)
       |> NimbleOptions.validate!(@config_schema)
