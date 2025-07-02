@@ -67,6 +67,10 @@ defmodule Homex.Entity.Switch do
         |> maybe_publish()
       end
 
+      def handle_info({_other_topic, _payload}, state) do
+        {:noreply, state}
+      end
+
       def handle_info(:update, state) do
         handle_update(state)
         |> maybe_publish()
