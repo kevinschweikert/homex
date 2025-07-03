@@ -15,4 +15,4 @@ config :homex,
     sw_version: "0.1.0",
     support_url: "http://localhost"
   ],
-  entities: [MySwitch]
+  entities: [MySwitch, MyTemperature, MyHumidity, MyLight]
