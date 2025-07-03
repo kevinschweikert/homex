@@ -112,6 +112,10 @@ defmodule Homex.Manager do
     {:noreply, state}
   end
 
+  def handle_info({:connected, _}, state) do
+    {:noreply, %{state | connected: true}}
+  end
+
   def handle_info({:EXIT, emqtt_pid, reason}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
     Logger.warning("emqtt crashed #{inspect(reason)}")
     {:noreply, %{state | connected: false, emqtt_pid: nil}}
