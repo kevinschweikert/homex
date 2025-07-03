@@ -31,8 +31,8 @@ defmodule Homex.Entity.Switch do
       @impl Homex.Entity
       def command_topic(), do: @command_topic
 
-      def on_payload(), do: @on_payload
-      def off_payload(), do: @off_payload
+      def on(), do: @on_payload
+      def off(), do: @off_payload
 
       @impl Homex.Entity
       def config do
@@ -99,14 +99,21 @@ defmodule Homex.Entity.Switch do
         {:noreply, state}
       end
 
-      defp maybe_publish({:reply, payload, state}) do
-        Homex.publish(@state_topic, payload)
+      defp maybe_publish({:reply, messages, state}) do
+        for {topic_atom, payload} <- messages do
+          topic_atom
+          |> atom_to_topic()
+          |> Homex.publish(payload)
+        end
+
         {:noreply, state}
       end
 
       defp maybe_publish({:noreply, state}) do
         {:noreply, state}
       end
+
+      defp atom_to_topic(:state), do: @state_topic
 
       defoverridable handle_on: 1,
                      handle_off: 1,
