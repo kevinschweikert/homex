@@ -14,8 +14,9 @@ defmodule Homex do
                      ]
                    ],
                    origin: [
-                     required: true,
+                     required: false,
                      type: :non_empty_keyword_list,
+                     default: [name: "homex"],
                      keys: [
                        name: [
                          required: false,
