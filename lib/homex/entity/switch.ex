@@ -4,7 +4,7 @@ defmodule Homex.Entity.Switch do
   """
 
   defmacro __using__(opts) do
-    quote bind_quoted: [opts: opts] do
+    quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
 
       @name opts[:name]
