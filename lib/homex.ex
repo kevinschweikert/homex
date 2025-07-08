@@ -80,8 +80,8 @@ defmodule Homex do
   defdelegate add_entity(module), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
 
-  def unique_id(name) do
-    "#{entity_id(name)}_#{:erlang.phash2(name)}"
+  def unique_id(platform, name) do
+    "#{platform}_#{entity_id(name)}_#{:erlang.phash2({platform, name})}"
   end
 
   def entity_id(name) when is_binary(name) do

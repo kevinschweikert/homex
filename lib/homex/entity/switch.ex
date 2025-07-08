@@ -8,10 +8,11 @@ defmodule Homex.Entity.Switch do
       @behaviour Homex.Entity
 
       @name opts[:name]
+      @platform "switch"
       @entity_id Homex.entity_id(@name)
-      @unique_id Homex.unique_id(@name)
-      @state_topic "homex/switch/#{Homex.entity_id(@name)}"
-      @command_topic "homex/switch/#{Homex.entity_id(@name)}/set"
+      @unique_id Homex.unique_id(@platform, @name)
+      @state_topic "homex/#{@platform}/#{@entity_id}"
+      @command_topic "homex/#{@platform}/#{@entity_id}/set"
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
       @update_interval Keyword.get(opts, :update_interval, 5000)
@@ -20,7 +21,11 @@ defmodule Homex.Entity.Switch do
 
       def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
+      @impl Homex.Entity
       def entity_id, do: @entity_id
+
+      @impl Homex.Entity
+      def unique_id, do: @unique_id
 
       @impl Homex.Entity
       def subscriptions, do: [@command_topic]
@@ -31,13 +36,16 @@ defmodule Homex.Entity.Switch do
       @impl Homex.Entity
       def command_topic(), do: @command_topic
 
+      @impl Homex.Entity
+      def platform(), do: @platform
+
       def on(), do: @on_payload
       def off(), do: @off_payload
 
       @impl Homex.Entity
       def config do
         %{
-          platform: "switch",
+          platform: @platform,
           state_topic: @state_topic,
           command_topic: @command_topic,
           name: @entity_id,

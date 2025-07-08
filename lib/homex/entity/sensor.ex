@@ -10,9 +10,10 @@ defmodule Homex.Entity.Sensor do
       @behaviour Homex.Entity
 
       @name opts[:name]
+      @platform "sensor"
       @entity_id Homex.entity_id(@name)
-      @unique_id Homex.unique_id(@name)
-      @state_topic "homex/sensor/#{Homex.entity_id(@name)}"
+      @unique_id Homex.unique_id(@platform, @name)
+      @state_topic "homex/#{@platform}/#{@entity_id}"
       @update_interval Keyword.get(opts, :update_interval, 5000)
       @unit_of_measurement opts[:unit_of_measurement]
       @device_class opts[:device_class]
@@ -21,7 +22,11 @@ defmodule Homex.Entity.Sensor do
 
       def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
+      @impl Homex.Entity
       def entity_id, do: @entity_id
+
+      @impl Homex.Entity
+      def unique_id, do: @unique_id
 
       @impl Homex.Entity
       def subscriptions, do: []
@@ -30,9 +35,12 @@ defmodule Homex.Entity.Sensor do
       def state_topic(), do: @state_topic
 
       @impl Homex.Entity
+      def platform(), do: @platform
+
+      @impl Homex.Entity
       def config do
         %{
-          platform: "sensor",
+          platform: @platform,
           state_topic: @state_topic,
           name: @entity_id,
           unique_id: @unique_id,

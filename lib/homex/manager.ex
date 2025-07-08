@@ -8,7 +8,8 @@ defmodule Homex.Manager do
     :emqtt_opts,
     connected: false,
     subscriptions: [],
-    entities: []
+    entities: [],
+    entities_to_remove: []
   ]
 
   def start_link(init_arg) do
@@ -105,7 +106,11 @@ defmodule Homex.Manager do
     end
   end
 
-  def handle_call({:remove_entity, module}, _from, %__MODULE__{entities: entities} = state) do
+  def handle_call(
+        {:remove_entity, module},
+        _from,
+        %__MODULE__{entities: entities, entities_to_remove: entities_to_remove} = state
+      ) do
     child =
       DynamicSupervisor.which_children(Homex.EntitySupervisor)
       |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, modules} ->
@@ -120,7 +125,8 @@ defmodule Homex.Manager do
       Logger.info("removed entity #{module.entity_id()}")
       publish_discovery_config()
 
-      {:reply, :ok, %{state | entities: entities}}
+      {:reply, :ok,
+       %{state | entities: entities, entities_to_remove: [module | entities_to_remove]}}
     else
       {:error, error} -> {:reply, {:error, error}, state}
     end
@@ -129,11 +135,20 @@ defmodule Homex.Manager do
   @impl GenServer
   def handle_cast(
         :publish_discovery_config,
-        %__MODULE__{emqtt_pid: emqtt_pid, entities: entities} = state
+        %__MODULE__{
+          emqtt_pid: emqtt_pid,
+          entities: entities,
+          entities_to_remove: entities_to_remove
+        } = state
       ) do
     components =
       for module <- entities, into: %{} do
-        {module.entity_id(), module.config()}
+        {module.unique_id(), module.config()}
+      end
+
+    components =
+      for module <- entities_to_remove, into: components do
+        {module.unique_id(), %{platform: module.platform()}}
       end
 
     discovery_config = Homex.discovery_config(components)
@@ -147,7 +162,7 @@ defmodule Homex.Manager do
       Logger.debug("published discovery config")
     end
 
-    {:noreply, state}
+    {:noreply, %{state | entities_to_remove: []}}
   end
 
   def handle_cast({:publish, topic, payload}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
