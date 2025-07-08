@@ -1,4 +1,9 @@
 defmodule Homex.Manager do
+  @moduledoc """
+  Central manager for broker and entities.
+
+  The mananger is responsible to manage the communication with the MQTT broker and keeps track of all registered entities.
+  """
   use GenServer
 
   require Logger
@@ -16,6 +21,11 @@ defmodule Homex.Manager do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
 
+  @doc """
+  Let's you publish additional messages to a topic
+  """
+  @spec publish(String.t(), binary() | map()) ::
+          :ok | {:error, Jason.EncodeError.t() | Exception.t()}
   def publish(topic, payload)
 
   def publish(topic, payload) when is_binary(payload) do
@@ -28,14 +38,19 @@ defmodule Homex.Manager do
     end
   end
 
-  def publish_discovery_config() do
-    GenServer.cast(__MODULE__, :publish_discovery_config)
-  end
-
   defp do_publish(topic, payload) do
     GenServer.cast(__MODULE__, {:publish, topic, payload})
   end
 
+  @spec publish_discovery_config() :: :ok
+  def publish_discovery_config() do
+    GenServer.cast(__MODULE__, :publish_discovery_config)
+  end
+
+  @doc """
+  Let's you subscribe to additional MQTT topics
+  """
+  @spec subscribe(String.t() | [String.t()]) :: String.t() | [String.t()]
   def subscribe(topics) when is_list(topics) do
     for topic <- topics do
       subscribe(topic)
@@ -47,6 +62,7 @@ defmodule Homex.Manager do
     topic
   end
 
+  @spec unsubscribe(String.t() | [String.t()]) :: String.t() | [String.t()]
   def unsubscribe(topics) when is_list(topics) do
     for topic <- topics do
       unsubscribe(topic)
@@ -58,6 +74,10 @@ defmodule Homex.Manager do
     topic
   end
 
+  @doc """
+  Adds a module to the entities and updates the discovery config, so that Home Assistant also adds this entity.
+  """
+  @spec add_entity(atom()) :: :ok | {:error, atom()}
   def add_entity(module) when is_atom(module) do
     if Homex.Entity.implements_behaviour?(module) do
       GenServer.call(__MODULE__, {:add_entity, module})
@@ -67,6 +87,10 @@ defmodule Homex.Manager do
     end
   end
 
+  @doc """
+  Removes a registered module from the entities and updates the discovery config, so that Home Assistant also removes this entity.
+  """
+  @spec remove_entity(atom()) :: :ok | {:error, atom()}
   def remove_entity(module) when is_atom(module) do
     if Homex.Entity.implements_behaviour?(module) do
       GenServer.call(__MODULE__, {:remove_entity, module})

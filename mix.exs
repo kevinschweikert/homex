@@ -7,7 +7,8 @@ defmodule Homex.MixProject do
       version: "0.1.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      docs: docs()
     ]
   end
 
@@ -15,6 +16,21 @@ defmodule Homex.MixProject do
   def application do
     [
       extra_applications: [:logger]
+    ]
+  end
+
+  def docs do
+    [
+      main: "readme",
+      extras: ["README.md", "CHANGELOG.md"],
+      groups_for_modules: [
+        Entities: [
+          Homex.Entity,
+          Homex.Entity.Switch,
+          Homex.Entity.Sensor,
+          Homex.Entity.Light
+        ]
+      ]
     ]
   end
 

@@ -1,11 +1,56 @@
 defmodule Homex.Entity.Light do
-  @moduledoc """
+  @moduledoc ~S"""
+  A light entity for Homex
+
   https://www.home-assistant.io/integrations/light.mqtt/
+
+  Options:
+
+  - `name` (required)
+  - `update_interval`
+  - `on_payload`
+  - `off_payload`
+
+  To publish a new state return `{:reply, [state: on(), brightness: 123], state}` from the handler. Otherwise return `{:noreply, state}`.
+
+  ## Example
+
+  ```elixir
+  defmodule MyLight do
+    use Homex.Entity.Light, name: "my-light"
+
+    def handle_brightness(brightness, state) do
+      {:ok, percentage} = convert_brightness(brightness)
+      IO.puts("Light set to #{percentage}%")
+      {:reply, [brightness: brightness], state}
+    end
+  end
+  ```
   """
+
+  @doc """
+  converts a string representing an 8-bit value to a percentage from 0 to 100"
+
+  ## Example
+
+      iex> Homex.Entity.Light.convert_brightness("123")
+      {:ok, 48.24}
+  """
+  @spec convert_brightness(String.t(), integer()) ::
+          {:ok, float()} | {:error, :invalid_brightness}
+  def convert_brightness(brightness, precision \\ 2) when is_binary(brightness) do
+    with {value, ""} when value >= 0 and value <= 255 <- Integer.parse(brightness) do
+      percentage = value * 100 / 255
+      {:ok, Float.round(percentage, precision)}
+    else
+      _ -> {:error, :invalid_brightness}
+    end
+  end
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
+      import Homex.Entity.Light
 
       @name opts[:name]
       @platform "light"
@@ -16,10 +61,8 @@ defmodule Homex.Entity.Light do
       @brightness_state_topic "homex/#{@platform}/#{@entity_id}/brightness"
       @brightness_command_topic "homex/#{@platform}/#{@entity_id}/brightness/set"
       @update_interval Keyword.get(opts, :update_interval, 5000)
-      @unit_of_measurement opts[:unit_of_measurement]
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
-      @device_class opts[:device_class]
 
       use GenServer
 
@@ -46,18 +89,11 @@ defmodule Homex.Entity.Light do
       def brightness_state_topic, do: @brightness_state_topic
       def brightness_command_topic, do: @brightness_command_topic
 
+      @impl Homex.Entity
       def on(), do: @on_payload
-      def off(), do: @off_payload
 
-      @doc "converts a string representing an 8-bit value to a percentage from 0 to 100"
-      def convert_brightness(brightness, precision \\ 2) when is_binary(brightness) do
-        with {value, ""} when value >= 0 and value <= 255 <- Integer.parse(brightness) do
-          percentage = value * 100 / 255
-          {:ok, Float.round(percentage, precision)}
-        else
-          _ -> {:error, :invalid_brightness}
-        end
-      end
+      @impl Homex.Entity
+      def off(), do: @off_payload
 
       @impl Homex.Entity
       def config do
@@ -68,9 +104,7 @@ defmodule Homex.Entity.Light do
           brightness_state_topic: @brightness_state_topic,
           brightness_command_topic: @brightness_command_topic,
           name: @entity_id,
-          unique_id: @unique_id,
-          device_class: @device_class,
-          unit_of_measurement: @unit_of_measurement
+          unique_id: @unique_id
         }
       end
 

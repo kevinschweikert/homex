@@ -1,4 +1,7 @@
 defmodule Homex.Supervisor do
+  @moduledoc """
+  The supervisor for Homex
+  """
   use Supervisor
 
   def start_link(init_arg) do

@@ -1,6 +1,38 @@
 defmodule Homex.Entity.Switch do
   @moduledoc """
-  https://www.home-assistant.io/integrations/switch.mqtt
+  A switch entity for Homex
+
+  Home Assistant docs: https://www.home-assistant.io/integrations/switch.mqtt
+
+  Options:
+
+  - `name` (required)
+  - `update_interval`
+  - `on_payload`
+  - `off_payload`
+
+
+  If an `update_interval` is set, the `handle_update/1` callback will be fired. By default the `update_interval` is set to `:never`
+
+  To publish a new state return `{:reply, [state: on()], state}` from the handler. Otherwise return `{:noreply, state}`
+
+  ## Example
+
+  ```elixir
+  defmodule MySwitch do
+    use Homex.Entity.Switch, name: "my-switch"
+
+    def handle_on(state) do
+      IO.puts("Switch turned on")
+      {:noreply, state}
+    end
+
+    def handle_off(state) do
+      IO.puts("Switch turned off")
+      {:noreply, state}
+    end
+  end
+  ```
   """
 
   defmacro __using__(opts) do
@@ -39,7 +71,10 @@ defmodule Homex.Entity.Switch do
       @impl Homex.Entity
       def platform(), do: @platform
 
+      @impl Homex.Entity
       def on(), do: @on_payload
+
+      @impl Homex.Entity
       def off(), do: @off_payload
 
       @impl Homex.Entity

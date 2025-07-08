@@ -40,13 +40,13 @@ end
 ```
 
 Configure broker and entities. See `Homex` module docs for options.
-Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_enitity/1`.
+Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_entity/1`.
 
 ```elixir
 import Config
 
 config :homex,
-  emqtt: [host: "localhost", port: 1883],
+  broker: [host: "localhost", port: 1883],
   entities: [MySwitch]
 ```
 
@@ -69,6 +69,6 @@ defmodule MyApp.Application do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/homex>.
+## Contribution
+
+PRs and Feedback are very welcome!

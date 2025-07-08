@@ -5,7 +5,7 @@ defmodule Homex do
                      required: false,
                      type: :non_empty_keyword_list,
                      doc:
-                       "If no device configuration is given the identifiers and name will be set to the hostname of the device running Homex and will fall back to 'homex device' when hostname is not available",
+                       "If no device configuration is given the identifiers and name will be set to the hostname of the device running Homex and will fall back to \"homex device\" when hostname is not available",
                      keys: [
                        identifiers: [required: true, type: {:list, :string}],
                        name: [required: false, type: :string],
@@ -42,10 +42,16 @@ defmodule Homex do
                        ]
                      ]
                    ],
-                   discovery_prefix: [required: false, type: :string, default: "homeassistant"],
+                   discovery_prefix: [
+                     required: false,
+                     type: :string,
+                     default: "homeassistant",
+                     doc:
+                       "if changed in Homeassistant you also need to change it here to enable autodiscovery. The default works for a standard installation"
+                   ],
                    qos: [required: false, type: :integer, default: 1],
                    entities: [required: false, default: [], type: {:list, :atom}],
-                   emqtt: [
+                   broker: [
                      required: false,
                      default: [],
                      type: :keyword_list,
@@ -62,9 +68,72 @@ defmodule Homex do
 
   @moduledoc """
 
-  Documentation for `Homex`.
+  ## Configuration
+
+  You can configure `Homex` through a normal config entry like
+
+  ```elixir
+  import Config
+
+  config :homex,
+    broker: [host: "localhost", port: 1883],
+    entities: [MyEntity]
+  ```
+
+  The available options are:
 
   #{NimbleOptions.docs(@config_schema)}
+
+  ## Usage
+
+  Define a module for the type of entity you want to use. The available types are:
+
+  - `Homex.Entity.Switch`
+  - `Homex.Entity.Sensor`
+  - `Homex.Entity.Light`
+
+  ```elixir
+  defmodule MySwitch do
+    use Homex.Entity.Switch, name: "my-switch"
+
+    def handle_on(state) do
+      IO.puts("Switch turned on")
+      {:noreply, state}
+    end
+
+    def handle_off(state) do
+      IO.puts("Switch turned off")
+      {:noreply, state}
+    end
+  end
+  ```
+
+  Configure broker and entities. Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_entity/1`.
+
+  ```elixir
+  import Config
+
+  config :homex,
+    entities: [MySwitch]
+  ```
+
+  Add `homex` to you supervision tree
+
+  ```elixir
+  defmodule MyApp.Application do
+    def start(_type, _args) do
+      children =
+        [
+          ...,
+          Homex,
+          ...
+        ]
+
+      opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+      Supervisor.start_link(children, opts)
+    end
+  end
+  ```
   """
 
   defdelegate start_link(opts \\ []), to: Homex.Supervisor
@@ -74,28 +143,69 @@ defmodule Homex do
   defdelegate add_entity(module), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
 
+  @doc """
+  Generates a unique ID from the platform name and entity name
+
+  ## Example
+
+      iex> Homex.unique_id("switch", "my-entity")
+      "switch_my_entity_91165224"
+  """
+  @spec unique_id(String.t(), String.t()) :: String.t()
   def unique_id(platform, name) do
     "#{platform}_#{entity_id(name)}_#{:erlang.phash2({platform, name})}"
   end
 
+  @doc """
+  Generates an escaped string from the entity name
+
+  ## Example
+
+      iex> Homex.entity_id("my-entity!?")
+      "my_entity"
+
+      iex> Homex.entity_id("--my-entity--")
+      "my_entity"
+
+      iex> Homex.entity_id("my         entity")
+      "my_entity"
+
+      iex> Homex.entity_id("_my entity_")
+      "my_entity"
+  """
+  @spec entity_id(String.t()) :: String.t()
   def entity_id(name) when is_binary(name) do
     name
     |> String.downcase()
-    |> String.replace(~r/[^a-z0-9_]/, "_")
+    |> String.replace(~r/[^a-z0-9]+/, "_")
+    |> String.trim("_")
   end
 
+  @doc """
+  Returns the statically defined entities from the config
+  """
+  @spec entities() :: [atom()]
   def entities do
     user_config_with_defaults()
     |> NimbleOptions.validate!(@config_schema)
     |> Keyword.get(:entities)
   end
 
+  @doc """
+  Returns the Home Assistant discovery prefix
+  """
+  @spec discovery_prefix() :: String.t()
   def discovery_prefix do
     user_config_with_defaults()
     |> NimbleOptions.validate!(@config_schema)
     |> Keyword.get(:discovery_prefix)
   end
 
+  @doc """
+  Returns the Home Assistant discovery config. This is a Map/JSON payload which contains all the necessary device and component data.data.
+  See https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery for more information
+  """
+  @spec discovery_config() :: map()
   def discovery_config(components \\ %{}) do
     config =
       user_config_with_defaults()
@@ -109,17 +219,21 @@ defmodule Homex do
     }
   end
 
+  @doc """
+  Returns the broker config for EMQTT, the MQTT client used in this library
+  """
+  @spec emqtt_options() :: Keyword.t()
   def emqtt_options do
     config =
       user_config_with_defaults()
       |> NimbleOptions.validate!(@config_schema)
 
     [
-      reconnect: config[:emqtt][:reconnect],
-      host: String.to_charlist(config[:emqtt][:host]),
-      port: config[:emqtt][:port],
-      username: String.to_charlist(config[:emqtt][:username]),
-      password: String.to_charlist(config[:emqtt][:password])
+      reconnect: config[:broker][:reconnect],
+      host: String.to_charlist(config[:broker][:host]),
+      port: config[:broker][:port],
+      username: String.to_charlist(config[:broker][:username]),
+      password: String.to_charlist(config[:broker][:password])
     ]
   end
 

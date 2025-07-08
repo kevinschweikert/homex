@@ -1,8 +1,34 @@
 defmodule Homex.Entity.Sensor do
   @moduledoc """
+  A sensor entity for Homex
+
   https://www.home-assistant.io/integrations/sensor.mqtt/
 
+  Options:
+
+  - `name` (required)
+  - `update_interval`
+  - `unit_of_measurement`
+  - `device_class`
+
   Available device classes: https://www.home-assistant.io/integrations/sensor#device-class
+
+  To publish a new state return `{:reply, [state: 14], state}` from the handler. Otherwise return `{:noreply, state}`.
+
+  ## Example
+
+  ```elixir
+  defmodule MyTemperature do
+    use Homex.Entity.Sensor,
+      name: "my-temperature",
+      unit_of_measurement: "C",
+      device_class: "temperature"
+
+    def handle_update(state) do
+      {:reply, [state: 14], state}
+    end
+  end
+  ```
   """
 
   defmacro __using__(opts) do
