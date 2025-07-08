@@ -5,7 +5,7 @@ defmodule Homex do
                      required: false,
                      type: :non_empty_keyword_list,
                      doc:
-                       "If no device configuration is given the identifiers will be set to the hostname of the device running Homex and will fall back to 'homex device' when hostname is not available",
+                       "If no device configuration is given the identifiers and name will be set to the hostname of the device running Homex and will fall back to 'homex device' when hostname is not available",
                      keys: [
                        identifiers: [required: true, type: {:list, :string}],
                        name: [required: false, type: :string],
@@ -48,16 +48,9 @@ defmodule Homex do
                    emqtt: [
                      required: false,
                      type: :non_empty_keyword_list,
-                     default: [
-                       reconnect: :infinity,
-                       host: "localhost",
-                       port: 1883,
-                       username: "admin",
-                       password: "admin"
-                     ],
                      keys: [
                        reconnect: [type: {:or, [:atom, :integer]}, default: :infinity],
-                       host: [type: :string, default: "localhost"],
+                       host: [required: true, type: :string],
                        port: [type: :integer, default: 1883],
                        username: [type: :string, default: "admin"],
                        password: [type: :string, default: "admin"]
@@ -91,27 +84,20 @@ defmodule Homex do
   end
 
   def entities do
-    Application.get_all_env(:homex)
+    user_config_with_defaults()
     |> NimbleOptions.validate!(@config_schema)
     |> Keyword.get(:entities)
   end
 
   def discovery_prefix do
-    Application.get_all_env(:homex)
+    user_config_with_defaults()
     |> NimbleOptions.validate!(@config_schema)
     |> Keyword.get(:discovery_prefix)
   end
 
   def discovery_config(components \\ %{}) do
-    hostname =
-      case :inet.gethostname() do
-        {:ok, hostname} -> to_string(hostname)
-        {:error, _} -> "homex device"
-      end
-
     config =
-      Application.get_all_env(:homex)
-      |> Keyword.merge(device: [identifiers: [hostname], name: hostname])
+      user_config_with_defaults()
       |> NimbleOptions.validate!(@config_schema)
 
     %{
@@ -124,7 +110,7 @@ defmodule Homex do
 
   def emqtt_options do
     config =
-      Application.get_all_env(:homex)
+      user_config_with_defaults()
       |> NimbleOptions.validate!(@config_schema)
 
     [
@@ -134,5 +120,16 @@ defmodule Homex do
       username: String.to_charlist(config[:emqtt][:username]),
       password: String.to_charlist(config[:emqtt][:password])
     ]
+  end
+
+  defp user_config_with_defaults do
+    hostname =
+      case :inet.gethostname() do
+        {:ok, hostname} -> to_string(hostname)
+        {:error, _} -> "homex device"
+      end
+
+    Application.get_all_env(:homex)
+    |> Keyword.merge(device: [identifiers: [hostname], name: hostname])
   end
 end
