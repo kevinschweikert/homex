@@ -19,22 +19,7 @@ def deps do
 end
 ```
 
-## Configuration
-
-```elixir
-import Config
-
-config :homex,
-  device: [
-    identifiers: ["my device"],
-  ],
-  origin: [
-    name: "homex",
-  ],
-  entities: [MySwitch]
-```
-
-## First Entity
+## Usage
 
 Define a module for the type of entity you want to use
 
@@ -51,11 +36,18 @@ defmodule MySwitch do
     IO.puts("Switch turned off")
     {:noreply, state}
   end
-
-  def handle_update(state) do
-    {:reply, Enum.random(["ON", "OFF"]), state}
-  end
 end
+```
+
+Configure broker and entities. See `Homex` module docs for options.
+Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_enitity/1`.
+
+```elixir
+import Config
+
+config :homex,
+  emqtt: [host: "localhost", port: 1883],
+  entities: [MySwitch]
 ```
 
 Add `homex` to you supervision tree

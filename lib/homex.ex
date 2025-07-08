@@ -47,10 +47,11 @@ defmodule Homex do
                    entities: [required: false, default: [], type: {:list, :atom}],
                    emqtt: [
                      required: false,
-                     type: :non_empty_keyword_list,
+                     default: [],
+                     type: :keyword_list,
                      keys: [
                        reconnect: [type: {:or, [:atom, :integer]}, default: :infinity],
-                       host: [required: true, type: :string],
+                       host: [type: :string, default: "localhost"],
                        port: [type: :integer, default: 1883],
                        username: [type: :string, default: "admin"],
                        password: [type: :string, default: "admin"]
