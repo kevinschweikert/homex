@@ -1,11 +1,14 @@
 defmodule Homex do
   @config_schema [
                    device: [
-                     required: true,
+                     default: [],
+                     required: false,
                      type: :non_empty_keyword_list,
+                     doc:
+                       "If no device configuration is given the identifiers will be set to the hostname of the device running Homex and will fall back to 'homex device' when hostname is not available",
                      keys: [
                        identifiers: [required: true, type: {:list, :string}],
-                       name: [required: true, type: :string],
+                       name: [required: false, type: :string],
                        manufacturer: [required: false, type: :string],
                        model: [required: false, type: :string],
                        serial_number: [required: false, type: :string],
@@ -97,8 +100,15 @@ defmodule Homex do
   end
 
   def discovery_config(components \\ %{}) do
+    hostname =
+      case :inet.gethostname() do
+        {:ok, hostname} -> to_string(hostname)
+        {:error, _} -> "homex device"
+      end
+
     config =
       Application.get_all_env(:homex)
+      |> Keyword.merge(device: [identifiers: [hostname], name: hostname])
       |> NimbleOptions.validate!(@config_schema)
 
     %{
