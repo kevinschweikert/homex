@@ -15,7 +15,7 @@ defmodule Homex.Entity.Switch do
       @command_topic "homex/#{@platform}/#{@entity_id}/set"
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
-      @update_interval Keyword.get(opts, :update_interval, 5000)
+      @update_interval Keyword.get(opts, :update_interval, :never)
 
       use GenServer
 
@@ -55,7 +55,11 @@ defmodule Homex.Entity.Switch do
 
       @impl GenServer
       def init(_init_arg \\ []) do
-        :timer.send_interval(@update_interval, :update)
+        case @update_interval do
+          :never -> :ok
+          time -> :timer.send_interval(time, :update)
+        end
+
         {:ok, initial_state()}
       end
 

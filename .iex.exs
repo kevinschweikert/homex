@@ -1,5 +1,5 @@
 defmodule MySwitch do
-  use Homex.Entity.Switch, name: "my-switch"
+  use Homex.Entity.Switch, name: "my-switch", update_interval: 10_000
 
   def handle_on(state) do
     IO.puts("Switch turned on")
