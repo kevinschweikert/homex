@@ -1,0 +1,28 @@
+defmodule Homex.Entity.SensorTest do
+  use ExUnit.Case, async: true
+  doctest Homex.Entity.Sensor
+
+  defmodule TestSensor do
+    use Homex.Entity.Sensor,
+      name: "test-sensor",
+      device_class: "temperature",
+      unit_of_measurement: "Celsius"
+  end
+
+  describe "behaviour" do
+    test "state topic" do
+      assert TestSensor.state_topic() == "homex/sensor/test_sensor"
+    end
+
+    test "config" do
+      assert TestSensor.config() == %{
+               platform: "sensor",
+               state_topic: "homex/sensor/test_sensor",
+               name: "test_sensor",
+               unique_id: "sensor_test_sensor_6119849",
+               unit_of_measurement: "Celsius",
+               device_class: "temperature"
+             }
+    end
+  end
+end
