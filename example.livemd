@@ -5,7 +5,6 @@ Mix.install([
   {:homex, path: __DIR__},
   ], config: [
   homex: [
-    device: [name: "my device", identifiers: ["foo"]],
     entities: [MySwitch, MyTemperature, MyHumidity, MyLight]
   ]
 ])
@@ -25,10 +24,6 @@ defmodule MySwitch do
   def handle_off(state) do
     IO.puts("Switch turned off")
     {:noreply, state}
-  end
-
-  def handle_update(state) do
-    {:reply, [state: Enum.random([on(), off()])], state}
   end
 end
 
