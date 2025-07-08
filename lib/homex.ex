@@ -44,7 +44,7 @@ defmodule Homex do
                    ],
                    discovery_prefix: [required: false, type: :string, default: "homeassistant"],
                    qos: [required: false, type: :integer, default: 1],
-                   entities: [required: true, type: {:list, :atom}],
+                   entities: [required: false, default: [], type: {:list, :atom}],
                    emqtt: [
                      required: false,
                      type: :non_empty_keyword_list,
@@ -76,6 +76,9 @@ defmodule Homex do
   defdelegate start_link(opts \\ []), to: Homex.Supervisor
   defdelegate publish(topic, payload), to: Homex.Manager
   defdelegate subscribe(topic), to: Homex.Manager
+  defdelegate unsubscribe(topic), to: Homex.Manager
+  defdelegate add_entity(module), to: Homex.Manager
+  defdelegate remove_entity(module), to: Homex.Manager
 
   def unique_id(name) do
     "#{entity_id(name)}_#{:erlang.phash2(name)}"
