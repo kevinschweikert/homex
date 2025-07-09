@@ -56,11 +56,18 @@ defmodule Homex do
                      default: [],
                      type: :keyword_list,
                      keys: [
-                       reconnect: [type: {:or, [:atom, :integer]}, default: :infinity],
-                       host: [type: :string, default: "localhost"],
-                       port: [type: :integer, default: 1883],
-                       username: [type: :string, default: "admin"],
-                       password: [type: :string, default: "admin"]
+                       host: [type: :string, default: "localhost", doc: "host of the MQTT broker"],
+                       port: [type: :integer, default: 1883, doc: "port of the MQTT broker"],
+                       username: [
+                         type: :string,
+                         default: "admin",
+                         doc: "username for the MQTT broker"
+                       ],
+                       password: [
+                         type: :string,
+                         default: "admin",
+                         doc: "passwort for the MQTT broker"
+                       ]
                      ]
                    ]
                  ]
@@ -229,7 +236,7 @@ defmodule Homex do
       |> NimbleOptions.validate!(@config_schema)
 
     [
-      reconnect: config[:broker][:reconnect],
+      reconnect: :infinity,
       host: String.to_charlist(config[:broker][:host]),
       port: config[:broker][:port],
       username: String.to_charlist(config[:broker][:username]),
