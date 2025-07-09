@@ -31,9 +31,31 @@ defmodule Homex.Entity.Sensor do
   ```
   """
 
+  @type state() :: term()
+
+  @doc """
+  The state topic of the sensor
+
+  This is where the current measureent gets published to
+  """
+  @callback state_topic() :: String.t()
+
+  @doc """
+  The intial state for the sensor
+
+  Default: `%{}`
+  """
+  @callback initial_state() :: state()
+
+  @doc """
+  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `5000`
+  """
+  @callback handle_update(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
+      @behaviour Homex.Entity.Sensor
 
       @name opts[:name]
       @platform "sensor"
@@ -57,7 +79,7 @@ defmodule Homex.Entity.Sensor do
       @impl Homex.Entity
       def subscriptions, do: []
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Sensor
       def state_topic(), do: @state_topic
 
       @impl Homex.Entity
@@ -82,7 +104,7 @@ defmodule Homex.Entity.Sensor do
       end
 
       @impl GenServer
-      def handle_info({_other_topic, _payload}, state) do
+      def handle_info({other_topic, _payload}, state) when is_binary(other_topic) do
         {:noreply, state}
       end
 
@@ -91,12 +113,12 @@ defmodule Homex.Entity.Sensor do
         |> maybe_publish()
       end
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Sensor
       def initial_state() do
         %{}
       end
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Sensor
       def handle_update(state) do
         {:noreply, state}
       end

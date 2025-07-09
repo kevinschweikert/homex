@@ -12,7 +12,6 @@ defmodule Homex.Entity.Switch do
   - `off_payload`
 
 
-  If an `update_interval` is set, the `handle_update/1` callback will be fired. By default the `update_interval` is set to `:never`
 
   To publish a new state return `{:reply, [state: on()], state}` from the handler. Otherwise return `{:noreply, state}`
 
@@ -35,9 +34,58 @@ defmodule Homex.Entity.Switch do
   ```
   """
 
+  @type state() :: term()
+
+  @doc """
+  The state topic of the switch
+
+  This is were we can update our current state
+  """
+  @callback state_topic() :: String.t()
+
+  @doc """
+  The command topic of the switch.
+
+  This is were the `ON` and `OFF` messages get received
+  """
+  @callback command_topic() :: String.t()
+
+  @doc """
+  The on payload for the state and command topic
+  """
+  @callback on() :: String.t()
+
+  @doc """
+  The off payload for the state and command topic
+  """
+  @callback off() :: String.t()
+
+  @doc """
+  The intial state for the switch
+
+  Default: `%{}`
+  """
+  @callback initial_state() :: state()
+
+  @doc """
+  Gets called when the command topic receieves an `on_payload`
+  """
+  @callback handle_on(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
+  @doc """
+  Gets called when the command topic receieves an `off_payload`
+  """
+  @callback handle_off(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
+  @doc """
+  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never` and this callback is not executed.
+  """
+  @callback handle_update(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
+      @behaviour Homex.Entity.Switch
 
       @name opts[:name]
       @platform "switch"
@@ -62,19 +110,19 @@ defmodule Homex.Entity.Switch do
       @impl Homex.Entity
       def subscriptions, do: [@command_topic]
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Switch
       def state_topic(), do: @state_topic
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Switch
       def command_topic(), do: @command_topic
 
       @impl Homex.Entity
       def platform(), do: @platform
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Switch
       def on(), do: @on_payload
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Switch
       def off(), do: @off_payload
 
       @impl Homex.Entity
@@ -109,12 +157,7 @@ defmodule Homex.Entity.Switch do
         |> maybe_publish()
       end
 
-      def handle_info({@command_topic, payload}, state) do
-        handle_command(payload, state)
-        |> maybe_publish()
-      end
-
-      def handle_info({_other_topic, _payload}, state) do
+      def handle_info({other_topic, _payload}, state) when is_binary(other_topic) do
         {:noreply, state}
       end
 
@@ -123,26 +166,23 @@ defmodule Homex.Entity.Switch do
         |> maybe_publish()
       end
 
+      @impl Homex.Entity.Switch
       def handle_on(state) do
         {:noreply, state}
       end
 
+      @impl Homex.Entity.Switch
       def handle_off(state) do
         {:noreply, state}
       end
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Switch
       def initial_state() do
         %{}
       end
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Switch
       def handle_update(state) do
-        {:noreply, state}
-      end
-
-      @impl Homex.Entity
-      def handle_command(_payload, state) do
         {:noreply, state}
       end
 
@@ -164,7 +204,6 @@ defmodule Homex.Entity.Switch do
 
       defoverridable handle_on: 1,
                      handle_off: 1,
-                     handle_command: 2,
                      handle_update: 1,
                      initial_state: 0
     end

@@ -28,6 +28,75 @@ defmodule Homex.Entity.Light do
   ```
   """
 
+  @type state() :: term()
+
+  @doc """
+  The state topic of the light
+
+  This is were we can update our current ON/OFF state
+  """
+  @callback state_topic() :: String.t()
+
+  @doc """
+  The command topic of the light.
+
+  This is were the `ON` and `OFF` messages get received
+  """
+  @callback command_topic() :: String.t()
+
+  @doc """
+  The brightness state topic of the light
+
+  This is were we can update our current brightness state
+  """
+  @callback brightness_state_topic() :: String.t()
+
+  @doc """
+  The command topic of the light.
+
+  This is were new brightness values get received
+  """
+
+  @callback brightness_command_topic() :: String.t()
+
+  @doc """
+  The on payload for the state and command topic
+  """
+  @callback on() :: String.t()
+
+  @doc """
+  The off payload for the state and command topic
+  """
+  @callback off() :: String.t()
+
+  @doc """
+  The intial state for the light
+
+  Default: `%{}`
+  """
+  @callback initial_state() :: state()
+
+  @doc """
+  Gets called when the command topic receieves an `on_payload`
+  """
+  @callback handle_on(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
+  @doc """
+  Gets called when the command topic receieves an `off_payload`
+  """
+  @callback handle_off(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
+  @doc """
+  Gets called when a new brightness value gets published to the brightness command topic 
+  """
+  @callback handle_brightness(String.t(), state()) ::
+              {:noreply, state()} | {:reply, Keyword.t(), state()}
+
+  @doc """
+  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `5000`
+  """
+  @callback handle_update(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+
   @doc """
   converts a string representing an 8-bit value to a percentage from 0 to 100"
 
@@ -35,6 +104,12 @@ defmodule Homex.Entity.Light do
 
       iex> Homex.Entity.Light.convert_brightness("123")
       {:ok, 48.24}
+
+      iex> Homex.Entity.Light.convert_brightness("1000")
+      {:error, :invalid_brightness}
+
+      iex> Homex.Entity.Light.convert_brightness("abc")
+      {:error, :invalid_brightness}
   """
   @spec convert_brightness(String.t(), integer()) ::
           {:ok, float()} | {:error, :invalid_brightness}
@@ -50,6 +125,7 @@ defmodule Homex.Entity.Light do
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
+      @behaviour Homex.Entity.Light
       import Homex.Entity.Light
 
       @name opts[:name]
@@ -77,22 +153,25 @@ defmodule Homex.Entity.Light do
       @impl Homex.Entity
       def subscriptions, do: [@command_topic, @brightness_command_topic]
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Light
       def state_topic(), do: @state_topic
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Light
       def command_topic(), do: @command_topic
 
       @impl Homex.Entity
       def platform(), do: @platform
 
+      @impl Homex.Entity.Light
       def brightness_state_topic, do: @brightness_state_topic
+
+      @impl Homex.Entity.Light
       def brightness_command_topic, do: @brightness_command_topic
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Light
       def on(), do: @on_payload
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Light
       def off(), do: @off_payload
 
       @impl Homex.Entity
@@ -130,7 +209,7 @@ defmodule Homex.Entity.Light do
         |> maybe_publish()
       end
 
-      def handle_info({_other_topic, _payload}, state) do
+      def handle_info({other_topic, _payload}, state) when is_binary(other_topic) do
         {:noreply, state}
       end
 
@@ -139,30 +218,28 @@ defmodule Homex.Entity.Light do
         |> maybe_publish()
       end
 
+      @impl Homex.Entity.Light
       def handle_on(state) do
         {:reply, [state: on()], state}
       end
 
+      @impl Homex.Entity.Light
       def handle_off(state) do
         {:reply, [state: off()], state}
       end
 
+      @impl Homex.Entity.Light
       def handle_brightness(brightness, state) do
         {:reply, [brightness: brightness], state}
       end
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Light
       def initial_state() do
         %{}
       end
 
-      @impl Homex.Entity
+      @impl Homex.Entity.Light
       def handle_update(state) do
-        {:noreply, state}
-      end
-
-      @impl Homex.Entity
-      def handle_command(_payload, state) do
         {:noreply, state}
       end
 
@@ -186,7 +263,6 @@ defmodule Homex.Entity.Light do
       defoverridable handle_on: 1,
                      handle_off: 1,
                      handle_brightness: 2,
-                     handle_command: 2,
                      handle_update: 1,
                      initial_state: 0
     end
