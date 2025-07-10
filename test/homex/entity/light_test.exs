@@ -7,22 +7,6 @@ defmodule Homex.Entity.LightTest do
   end
 
   describe "behaviour" do
-    test "state topic" do
-      assert TestLight.state_topic() == "homex/light/test_light"
-    end
-
-    test "command topic" do
-      assert TestLight.command_topic() == "homex/light/test_light/set"
-    end
-
-    test "brightness state topic" do
-      assert TestLight.brightness_state_topic() == "homex/light/test_light/brightness"
-    end
-
-    test "brightness command topic" do
-      assert TestLight.brightness_command_topic() == "homex/light/test_light/brightness/set"
-    end
-
     test "config" do
       assert TestLight.config() == %{
                platform: "light",

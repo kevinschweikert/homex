@@ -28,74 +28,34 @@ defmodule Homex.Entity.Light do
   ```
   """
 
-  @type state() :: term()
+  alias Homex.Entity
 
-  @doc """
-  The state topic of the light
-
-  This is were we can update our current ON/OFF state
-  """
-  @callback state_topic() :: String.t()
-
-  @doc """
-  The command topic of the light.
-
-  This is were the `ON` and `OFF` messages get received
-  """
-  @callback command_topic() :: String.t()
-
-  @doc """
-  The brightness state topic of the light
-
-  This is were we can update our current brightness state
-  """
-  @callback brightness_state_topic() :: String.t()
-
-  @doc """
-  The command topic of the light.
-
-  This is were new brightness values get received
-  """
-
-  @callback brightness_command_topic() :: String.t()
-
-  @doc """
-  The on payload for the state and command topic
-  """
-  @callback on() :: String.t()
-
-  @doc """
-  The off payload for the state and command topic
-  """
-  @callback off() :: String.t()
-
+  @callback set_on(Entity.t()) :: Entity.t()
+  @callback set_off(Entity.t()) :: Entity.t()
+  @callback set_brightness(Entity.t(), float()) :: Entity.t()
   @doc """
   The intial state for the light
-
-  Default: `%{}`
   """
-  @callback initial_state() :: state()
+  @callback handle_init(Entity.t()) :: {:ok, Entity.t()}
 
   @doc """
   Gets called when the command topic receieves an `on_payload`
   """
-  @callback handle_on(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+  @callback handle_on(Entity.t()) :: {:noreply, Entity.t()}
 
   @doc """
   Gets called when the command topic receieves an `off_payload`
   """
-  @callback handle_off(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
-
+  @callback handle_off(Entity.t()) :: {:noreply, Entity.t()}
   @doc """
   Gets called when a new brightness value gets published to the brightness command topic 
   """
-  @callback handle_brightness(String.t(), state()) ::
-              {:noreply, state()} | {:reply, Keyword.t(), state()}
+  @callback handle_brightness(float(), Entity.t()) :: {:noreply, Entity.t()}
 
   @doc """
   If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
   """
-  @callback handle_update(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+  @callback handle_timer(Entity.t()) :: {:noreply, Entity.t()}
 
   @doc """
   converts a string representing an 8-bit value to a percentage from 0 to 100"
@@ -128,7 +88,7 @@ defmodule Homex.Entity.Light do
       @behaviour Homex.Entity.Light
       import Homex.Entity.Light
 
-      @name opts[:name]
+      @name Keyword.fetch!(opts, :name)
       @platform "light"
       @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
@@ -153,26 +113,8 @@ defmodule Homex.Entity.Light do
       @impl Homex.Entity
       def subscriptions, do: [@command_topic, @brightness_command_topic]
 
-      @impl Homex.Entity.Light
-      def state_topic(), do: @state_topic
-
-      @impl Homex.Entity.Light
-      def command_topic(), do: @command_topic
-
       @impl Homex.Entity
       def platform(), do: @platform
-
-      @impl Homex.Entity.Light
-      def brightness_state_topic, do: @brightness_state_topic
-
-      @impl Homex.Entity.Light
-      def brightness_command_topic, do: @brightness_command_topic
-
-      @impl Homex.Entity.Light
-      def on(), do: @on_payload
-
-      @impl Homex.Entity.Light
-      def off(), do: @off_payload
 
       @impl Homex.Entity
       def config do
@@ -187,6 +129,21 @@ defmodule Homex.Entity.Light do
         }
       end
 
+      @impl Homex.Entity.Light
+      def set_on(%Entity{} = entity) do
+        Entity.put_change(entity, :state, @on_payload)
+      end
+
+      @impl Homex.Entity.Light
+      def set_off(%Entity{} = entity) do
+        Entity.put_change(entity, :state, @off_payload)
+      end
+
+      @impl Homex.Entity.Light
+      def set_brightness(%Entity{} = entity, value) when value >= 0 and value <= 100 do
+        Entity.put_change(entity, :brightness, Float.round(value / 100 * 255, 0))
+      end
+
       @impl GenServer
       def init(_init_arg \\ []) do
         case @update_interval do
@@ -194,81 +151,81 @@ defmodule Homex.Entity.Light do
           time -> :timer.send_interval(time, :update)
         end
 
-        {:ok, initial_state()}
+        entity =
+          %Entity{}
+          |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
+          |> Entity.register_handler(:brightness, fn val ->
+            Homex.publish(@brightness_state_topic, val)
+          end)
+
+        with {:ok, entity} <- handle_init(entity) do
+          {:ok, Entity.execute_change(entity)}
+        end
       end
 
       @impl GenServer
-      def handle_info({@command_topic, @on_payload}, state) do
-        handle_on(state)
-        |> maybe_publish()
-      end
-
-      def handle_info({@command_topic, @off_payload}, state) do
-        handle_off(state)
-        |> maybe_publish()
-      end
-
-      def handle_info({@brightness_command_topic, brightness}, state) do
-        handle_brightness(brightness, state)
-        |> maybe_publish()
-      end
-
-      def handle_info({other_topic, _payload}, state) when is_binary(other_topic) do
-        {:noreply, state}
-      end
-
-      def handle_info(:update, state) do
-        handle_update(state)
-        |> maybe_publish()
-      end
-
-      @impl Homex.Entity.Light
-      def handle_on(state) do
-        {:reply, [state: on()], state}
-      end
-
-      @impl Homex.Entity.Light
-      def handle_off(state) do
-        {:reply, [state: off()], state}
-      end
-
-      @impl Homex.Entity.Light
-      def handle_brightness(brightness, state) do
-        {:reply, [brightness: brightness], state}
-      end
-
-      @impl Homex.Entity.Light
-      def initial_state() do
-        %{}
-      end
-
-      @impl Homex.Entity.Light
-      def handle_update(state) do
-        {:noreply, state}
-      end
-
-      defp maybe_publish({:reply, messages, state}) do
-        for {topic_atom, payload} <- messages do
-          topic_atom
-          |> atom_to_topic()
-          |> Homex.publish(payload)
+      def handle_info({@command_topic, @on_payload}, entity) do
+        with entity <- set_on(entity),
+             {:noreply, entity} <- handle_on(entity) do
+          {:noreply, Entity.execute_change(entity)}
         end
-
-        {:noreply, state}
       end
 
-      defp maybe_publish({:noreply, state}) do
-        {:noreply, state}
+      def handle_info({@command_topic, @off_payload}, entity) do
+        with entity <- set_off(entity),
+             {:noreply, entity} <- handle_off(entity) do
+          {:noreply, Entity.execute_change(entity)}
+        end
       end
 
-      defp atom_to_topic(:state), do: @state_topic
-      defp atom_to_topic(:brightness), do: @brightness_state_topic
+      def handle_info({@brightness_command_topic, brightness}, entity) do
+        with {:ok, value} <- convert_brightness(brightness),
+             entity <- set_brightness(entity, brightness),
+             {:noreply, entity} <- handle_brightness(value, entity) do
+          {:noreply, Entity.execute_change(entity)}
+        end
+      end
+
+      def handle_info({other_topic, _payload}, entity) when is_binary(other_topic) do
+        {:noreply, entity}
+      end
+
+      def handle_info(:update, entity) do
+        with {:noreply, entity} <- handle_timer(entity) do
+          {:noreply, Entity.execute_change(entity)}
+        end
+      end
+
+      @impl Homex.Entity.Light
+      def handle_init(entity) do
+        {:ok, entity}
+      end
+
+      @impl Homex.Entity.Light
+      def handle_timer(entity) do
+        {:noreply, entity}
+      end
+
+      @impl Homex.Entity.Light
+      def handle_on(entity) do
+        {:noreply, entity}
+      end
+
+      @impl Homex.Entity.Light
+      def handle_off(entity) do
+        {:noreply, entity}
+      end
+
+      @impl Homex.Entity.Light
+      def handle_brightness(brightness, entity) do
+        {:noreply, entity}
+      end
 
       defoverridable handle_on: 1,
                      handle_off: 1,
                      handle_brightness: 2,
-                     handle_update: 1,
-                     initial_state: 0
+                     handle_timer: 1,
+                     handle_init: 1
     end
   end
 end

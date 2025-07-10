@@ -41,9 +41,8 @@ end
 defmodule MyLight do
   use Homex.Entity.Light, name: "my-light"
 
-  def handle_brightness(brightness, state) do
-    {:ok, percentage} = convert_brightness(brightness)
-    IO.puts("Light set to #{percentage}%")
-    {:reply, [brightness: brightness], state}
+  @impl true
+  def handle_init(entity) do
+    {:ok, entity |> set_on() |> set_brightness(50)}
   end
 end
