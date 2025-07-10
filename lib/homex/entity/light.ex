@@ -93,7 +93,7 @@ defmodule Homex.Entity.Light do
               {:noreply, state()} | {:reply, Keyword.t(), state()}
 
   @doc """
-  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `5000`
+  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
   """
   @callback handle_update(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
 
@@ -136,7 +136,7 @@ defmodule Homex.Entity.Light do
       @command_topic "homex/#{@platform}/#{@entity_id}/set"
       @brightness_state_topic "homex/#{@platform}/#{@entity_id}/brightness"
       @brightness_command_topic "homex/#{@platform}/#{@entity_id}/brightness/set"
-      @update_interval Keyword.get(opts, :update_interval, 5000)
+      @update_interval Keyword.get(opts, :update_interval, :never)
       @on_payload Keyword.get(opts, :on_payload, "ON")
       @off_payload Keyword.get(opts, :off_payload, "OFF")
 
@@ -189,7 +189,11 @@ defmodule Homex.Entity.Light do
 
       @impl GenServer
       def init(_init_arg \\ []) do
-        :timer.send_interval(@update_interval, :update)
+        case @update_interval do
+          :never -> :ok
+          time -> :timer.send_interval(time, :update)
+        end
+
         {:ok, initial_state()}
       end
 
