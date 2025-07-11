@@ -1,24 +1,31 @@
 defmodule Homex.Entity do
   @moduledoc """
-  Defines the behaviour for an entity implementation
+  Defines the behaviour and struct for an entity implementation
   """
+
   @type t() :: %__MODULE__{
-          keys: MapSet.new(),
+          keys: MapSet.t(),
           values: map(),
           handlers: map(),
           changes: map(),
-          private: nil
+          private: map()
         }
 
-  defstruct values: %{}, changes: %{}, handlers: %{}, keys: MapSet.new(), private: nil
+  defstruct values: %{}, changes: %{}, handlers: %{}, keys: MapSet.new(), private: %{}
 
+  @doc false
+  @spec new() :: t()
+  def new, do: %__MODULE__{}
+
+  @doc false
+  @spec register_handler(t(), atom(), fun(), term()) :: t()
   def register_handler(
         %__MODULE__{keys: keys, values: values, handlers: handlers} = entity,
         key,
         handler_fn,
         initial_value \\ nil
       )
-      when is_atom(key) do
+      when is_atom(key) and is_function(handler_fn) do
     values = Map.put(values, key, initial_value)
     handlers = Map.put(handlers, key, handler_fn)
     keys = MapSet.put(keys, key)
@@ -26,6 +33,8 @@ defmodule Homex.Entity do
     %{entity | keys: keys, values: values, handlers: handlers}
   end
 
+  @doc false
+  @spec put_change(t(), atom(), term()) :: t()
   def put_change(%__MODULE__{keys: keys, changes: changes} = entity, key, value)
       when is_atom(key) do
     if key in keys do
@@ -34,6 +43,8 @@ defmodule Homex.Entity do
     end
   end
 
+  @doc false
+  @spec execute_change(t()) :: t()
   def execute_change(
         %__MODULE__{keys: keys, values: values, changes: changes, handlers: handlers} = entity
       ) do
@@ -53,10 +64,36 @@ defmodule Homex.Entity do
     %{entity | changes: %{}, values: values}
   end
 
+  @doc """
+  Puts a value into the Entity struct to retrieve it later. Can be used as a key-value store for user data
+  """
+  @spec put_private(t(), atom(), term()) :: t()
+  def put_private(%__MODULE__{private: private} = entity, key, value) when is_atom(key) do
+    private = Map.put(private, key, value)
+    %{entity | private: private}
+  end
+
+  @doc """
+  Gets the value from the Entity struct
+  """
+  @spec get_private(t(), atom()) :: term()
+  def get_private(%__MODULE__{private: private}, key) when is_atom(key) do
+    Map.get(private, key)
+  end
+
+  @doc "The escaped name of the entity"
   @callback entity_id() :: String.t()
+
+  @doc "The unique id of the entity"
   @callback unique_id() :: String.t()
+
+  @doc "The list of topics to subscribe to"
   @callback subscriptions() :: [String.t()]
+
+  @doc "The Home Assistant component config definition"
   @callback config() :: map()
+
+  @doc "The Home Assistant platform"
   @callback platform() :: String.t()
 
   @doc """

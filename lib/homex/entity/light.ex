@@ -7,11 +7,7 @@ defmodule Homex.Entity.Light do
   Options:
 
   - `name` (required)
-  - `update_interval`
-  - `on_payload`
-  - `off_payload`
-
-  To publish a new state return `{:reply, [state: on(), brightness: 123], state}` from the handler. Otherwise return `{:noreply, state}`.
+  - `update_interval` (milliseconds)
 
   ## Example
 
@@ -19,10 +15,9 @@ defmodule Homex.Entity.Light do
   defmodule MyLight do
     use Homex.Entity.Light, name: "my-light"
 
-    def handle_brightness(brightness, state) do
-      {:ok, percentage} = convert_brightness(brightness)
-      IO.puts("Light set to #{percentage}%")
-      {:reply, [brightness: brightness], state}
+    def handle_brightness(brightness, entity) do
+      IO.puts("Light set to #{brightness}%")
+      {:noreply, entity}
     end
   end
   ```
@@ -30,47 +25,46 @@ defmodule Homex.Entity.Light do
 
   alias Homex.Entity
 
-  @callback set_on(Entity.t()) :: Entity.t()
-  @callback set_off(Entity.t()) :: Entity.t()
-  @callback set_brightness(Entity.t(), float()) :: Entity.t()
+  @doc """
+  Sets the light state to on
+  """
+  @callback set_on(entity :: Entity.t()) :: entity :: Entity.t()
+  @doc """
+  Sets the light state to off
+  """
+  @callback set_off(entity :: Entity.t()) :: Entity.t()
+
+  @doc """
+  Sets the lights brightness to the specified value. Must be between 0 and 100
+  """
+  @callback set_brightness(entity :: Entity.t(), brigtness :: float()) :: entity :: Entity.t()
+
   @doc """
   The intial state for the light
   """
-  @callback handle_init(Entity.t()) :: {:ok, Entity.t()}
+  @callback handle_init(entity :: Entity.t()) :: {:ok, entity :: Entity.t()}
 
   @doc """
   Gets called when the command topic receieves an `on_payload`
   """
-  @callback handle_on(Entity.t()) :: {:noreply, Entity.t()}
+  @callback handle_on(entity :: Entity.t()) :: {:noreply, entity :: Entity.t()}
 
   @doc """
   Gets called when the command topic receieves an `off_payload`
   """
-  @callback handle_off(Entity.t()) :: {:noreply, Entity.t()}
+  @callback handle_off(entity :: Entity.t()) :: {:noreply, entity :: Entity.t()}
   @doc """
   Gets called when a new brightness value gets published to the brightness command topic 
   """
-  @callback handle_brightness(float(), Entity.t()) :: {:noreply, Entity.t()}
+  @callback handle_brightness(brightness :: float(), entity :: Entity.t()) ::
+              {:noreply, entity :: Entity.t()}
 
   @doc """
   If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
   """
-  @callback handle_timer(Entity.t()) :: {:noreply, Entity.t()}
+  @callback handle_timer(entity :: Entity.t()) :: {:noreply, Entity.t()}
 
-  @doc """
-  converts a string representing an 8-bit value to a percentage from 0 to 100"
-
-  ## Example
-
-      iex> Homex.Entity.Light.convert_brightness("123")
-      {:ok, 48.24}
-
-      iex> Homex.Entity.Light.convert_brightness("1000")
-      {:error, :invalid_brightness}
-
-      iex> Homex.Entity.Light.convert_brightness("abc")
-      {:error, :invalid_brightness}
-  """
+  @doc false
   @spec convert_brightness(String.t(), integer()) ::
           {:ok, float()} | {:error, :invalid_brightness}
   def convert_brightness(brightness, precision \\ 2) when is_binary(brightness) do
@@ -97,8 +91,8 @@ defmodule Homex.Entity.Light do
       @brightness_state_topic "homex/#{@platform}/#{@entity_id}/brightness"
       @brightness_command_topic "homex/#{@platform}/#{@entity_id}/brightness/set"
       @update_interval Keyword.get(opts, :update_interval, :never)
-      @on_payload Keyword.get(opts, :on_payload, "ON")
-      @off_payload Keyword.get(opts, :off_payload, "OFF")
+      @on_payload "ON"
+      @off_payload "OFF"
 
       use GenServer
 
@@ -129,21 +123,6 @@ defmodule Homex.Entity.Light do
         }
       end
 
-      @impl Homex.Entity.Light
-      def set_on(%Entity{} = entity) do
-        Entity.put_change(entity, :state, @on_payload)
-      end
-
-      @impl Homex.Entity.Light
-      def set_off(%Entity{} = entity) do
-        Entity.put_change(entity, :state, @off_payload)
-      end
-
-      @impl Homex.Entity.Light
-      def set_brightness(%Entity{} = entity, value) when value >= 0 and value <= 100 do
-        Entity.put_change(entity, :brightness, Float.round(value / 100 * 255, 0))
-      end
-
       @impl GenServer
       def init(_init_arg \\ []) do
         case @update_interval do
@@ -161,6 +140,21 @@ defmodule Homex.Entity.Light do
         with {:ok, entity} <- handle_init(entity) do
           {:ok, Entity.execute_change(entity)}
         end
+      end
+
+      @impl Homex.Entity.Light
+      def set_on(%Entity{} = entity) do
+        Entity.put_change(entity, :state, @on_payload)
+      end
+
+      @impl Homex.Entity.Light
+      def set_off(%Entity{} = entity) do
+        Entity.put_change(entity, :state, @off_payload)
+      end
+
+      @impl Homex.Entity.Light
+      def set_brightness(%Entity{} = entity, value) when value >= 0 and value <= 100 do
+        Entity.put_change(entity, :brightness, Float.round(value / 100 * 255, 0))
       end
 
       @impl GenServer
