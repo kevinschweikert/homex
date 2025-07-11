@@ -47,29 +47,26 @@ defmodule Homex.Manager do
     GenServer.cast(__MODULE__, :publish_discovery_config)
   end
 
-  @doc """
-  Let's you subscribe to additional MQTT topics
-  """
   @spec subscribe(String.t() | [String.t()]) :: String.t() | [String.t()]
-  def subscribe(topics) when is_list(topics) do
+  defp subscribe(topics) when is_list(topics) do
     for topic <- topics do
       subscribe(topic)
     end
   end
 
-  def subscribe(topic) when is_binary(topic) do
+  defp subscribe(topic) when is_binary(topic) do
     GenServer.cast(__MODULE__, {:subscribe, topic})
     topic
   end
 
   @spec unsubscribe(String.t() | [String.t()]) :: String.t() | [String.t()]
-  def unsubscribe(topics) when is_list(topics) do
+  defp unsubscribe(topics) when is_list(topics) do
     for topic <- topics do
       unsubscribe(topic)
     end
   end
 
-  def unsubscribe(topic) when is_binary(topic) do
+  defp unsubscribe(topic) when is_binary(topic) do
     GenServer.cast(__MODULE__, {:unsubscribe, topic})
     topic
   end
