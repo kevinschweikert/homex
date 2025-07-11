@@ -41,7 +41,6 @@ end
 defmodule MyLight do
   use Homex.Entity.Light, name: "my-light"
 
-  @impl true
   def handle_init(entity) do
     {:ok, entity |> set_on() |> set_brightness(50)}
   end

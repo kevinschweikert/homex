@@ -10,72 +10,65 @@ Mix.install([
 ])
 ```
 
-## Section
+## Homex
 
 ```elixir
 defmodule MySwitch do
   use Homex.Entity.Switch, name: "my-switch"
 
-  def handle_on(state) do
+  def handle_on(entity) do
     IO.puts("Switch turned on")
-    {:noreply, state}
+    {:noreply, entity}
   end
 
-  def handle_off(state) do
+  def handle_off(entity) do
     IO.puts("Switch turned off")
-    {:noreply, state}
+    {:noreply, entity}
   end
 end
 
 defmodule MyTemperature do
   use Homex.Entity.Sensor,
     name: "my-temperature",
-    unit_of_measurement: "C",
+    unit_of_measurement: Homex.Unit.temperature(:c),
     device_class: "temperature"
 
-  def handle_update(state) do
-    {:reply, [state: Enum.random(-40..40//1)], state}
+  def handle_timer(entity) do
+    {:noreply, entity |> set_value(Enum.random(-40..40//1))}
   end
+
 end
 
 defmodule MyHumidity do
   use Homex.Entity.Sensor,
     name: "my-humidiy",
-    unit_of_measurement: "%",
+    unit_of_measurement: Homex.Unit.humidity(),
     device_class: "humidity"
 
-  def handle_update(state) do
-    {:reply, [state: Enum.random(20..90//1)], state}
+  def handle_timer(entity) do
+    {:noreply, entity |> set_value(Enum.random(20..90//1))}
   end
 end
 
 defmodule MyLight do
   use Homex.Entity.Light, name: "my-light"
 
-  def handle_brightness(brightness, state) do
-    {:ok, percentage} = convert_brightness(brightness, 0)
-    IO.puts("Light set to #{percentage}%")
-    {:reply, [brightness: brightness], state}
+  def handle_init(entity) do
+    {:ok, entity |> set_on() |> set_brightness(50)}
+  end
+  
+  def handle_brightness(brightness, entity) do
+    IO.puts("Light set to #{brightness}%")
+    {:noreply, entity}
   end
 end
 ```
 
 ```elixir
 Logger.put_application_level(:emqtt, :info)
+Logger.put_application_level(:homex, :info)
 ```
 
 ```elixir
 {:ok, pid} = Homex.start_link()
-```
-
-```elixir
-Homex.publish(MySwitch.command_topic(), MySwitch.on())
-```
-
-```elixir
-Homex.publish(MySwitch.command_topic(), MySwitch.off())
-```
-
-```elixir
-Homex.publish(MyLight.brightness_command_topic(), "138")
 ```
