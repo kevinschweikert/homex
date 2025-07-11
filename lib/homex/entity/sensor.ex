@@ -19,11 +19,11 @@ defmodule Homex.Entity.Sensor do
   defmodule MyTemperature do
     use Homex.Entity.Sensor,
       name: "my-temperature",
-      unit_of_measurement: "C",
+      unit_of_measurement: Homex.Unit.temperature(:c),
       device_class: "temperature"
 
     def handle_timer(entity) do
-      {:noreply, entity |> set_state(14)}
+      {:noreply, entity |> set_value(14)}
     end
   end
   ```
