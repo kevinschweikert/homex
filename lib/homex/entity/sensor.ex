@@ -13,8 +13,6 @@ defmodule Homex.Entity.Sensor do
 
   Available device classes: https://www.home-assistant.io/integrations/sensor#device-class
 
-  To publish a new state return `{:reply, [state: 14], state}` from the handler. Otherwise return `{:noreply, state}`.
-
   ## Example
 
   ```elixir
@@ -24,40 +22,36 @@ defmodule Homex.Entity.Sensor do
       unit_of_measurement: "C",
       device_class: "temperature"
 
-    def handle_update(state) do
-      {:reply, [state: 14], state}
+    def handle_timer(entity) do
+      {:noreply, entity |> set_state(14)}
     end
   end
   ```
   """
 
-  @type state() :: term()
+  alias Homex.Entity
 
   @doc """
-  The state topic of the sensor
-
-  This is where the current measureent gets published to
+  Sets the entity value
   """
-  @callback state_topic() :: String.t()
+  @callback set_value(entity :: Entity.t(), value :: term()) :: entity :: Entity.t()
 
   @doc """
-  The intial state for the sensor
-
-  Default: `%{}`
+  Configures the intial state for the sensor
   """
-  @callback initial_state() :: state()
+  @callback handle_init(entity :: Entity.t()) :: {:ok, entity :: Entity.t()}
 
   @doc """
   If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `5000`
   """
-  @callback handle_update(state()) :: {:noreply, state()} | {:reply, Keyword.t(), state()}
+  @callback handle_timer(entity :: Entity.t()) :: {:noreply, Entity.t()}
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Sensor
 
-      @name opts[:name]
+      @name Keyword.fetch!(opts, :name)
       @platform "sensor"
       @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
@@ -79,9 +73,6 @@ defmodule Homex.Entity.Sensor do
       @impl Homex.Entity
       def subscriptions, do: []
 
-      @impl Homex.Entity.Sensor
-      def state_topic(), do: @state_topic
-
       @impl Homex.Entity
       def platform(), do: @platform
 
@@ -99,8 +90,23 @@ defmodule Homex.Entity.Sensor do
 
       @impl GenServer
       def init(_init_arg \\ []) do
-        :timer.send_interval(@update_interval, :update)
-        {:ok, initial_state()}
+        case @update_interval do
+          :never -> :ok
+          time -> :timer.send_interval(time, :update)
+        end
+
+        entity =
+          %Entity{}
+          |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
+
+        with {:ok, entity} <- handle_init(entity) do
+          {:ok, Entity.execute_change(entity)}
+        end
+      end
+
+      @impl Homex.Entity.Sensor
+      def set_value(%Entity{} = entity, value) do
+        Entity.put_change(entity, :state, value)
       end
 
       @impl GenServer
@@ -108,38 +114,23 @@ defmodule Homex.Entity.Sensor do
         {:noreply, state}
       end
 
-      def handle_info(:update, state) do
-        handle_update(state)
-        |> maybe_publish()
-      end
-
-      @impl Homex.Entity.Sensor
-      def initial_state() do
-        %{}
-      end
-
-      @impl Homex.Entity.Sensor
-      def handle_update(state) do
-        {:noreply, state}
-      end
-
-      defp maybe_publish({:reply, messages, state}) do
-        for {topic_atom, payload} <- messages do
-          topic_atom
-          |> atom_to_topic()
-          |> Homex.publish(payload)
+      def handle_info(:update, entity) do
+        with {:noreply, entity} <- handle_timer(entity) do
+          {:noreply, Entity.execute_change(entity)}
         end
-
-        {:noreply, state}
       end
 
-      defp maybe_publish({:noreply, state}) do
-        {:noreply, state}
+      @impl Homex.Entity.Sensor
+      def handle_init(entity) do
+        {:ok, entity}
       end
 
-      defp atom_to_topic(:state), do: @state_topic
+      @impl Homex.Entity.Sensor
+      def handle_timer(entity) do
+        {:noreply, entity}
+      end
 
-      defoverridable handle_update: 1, initial_state: 0
+      defoverridable handle_init: 1, handle_timer: 1
     end
   end
 end
