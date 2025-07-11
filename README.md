@@ -27,14 +27,14 @@ Define a module for the type of entity you want to use
 defmodule MySwitch do
   use Homex.Entity.Switch, name: "my-switch"
 
-  def handle_on(state) do
+  def handle_on(entity) do
     IO.puts("Switch turned on")
-    {:noreply, state}
+    {:noreply, entity}
   end
 
-  def handle_off(state) do
+  def handle_off(entity) do
     IO.puts("Switch turned off")
-    {:noreply, state}
+    {:noreply, entity}
   end
 end
 ```
