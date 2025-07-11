@@ -38,7 +38,7 @@ defmodule Homex.Entity.Light do
   @doc """
   Sets the lights brightness to the specified value. Must be between 0 and 100
   """
-  @callback set_brightness(entity :: Entity.t(), brigtness :: float()) :: entity :: Entity.t()
+  @callback set_brightness(entity :: Entity.t(), brightness :: float()) :: entity :: Entity.t()
 
   @doc """
   Configures the intial state for the light
