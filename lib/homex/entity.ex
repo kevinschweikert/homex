@@ -40,6 +40,8 @@ defmodule Homex.Entity do
     if key in keys do
       changes = Map.put(changes, key, value)
       %{entity | changes: changes}
+    else
+      {:error, :badkey}
     end
   end
 

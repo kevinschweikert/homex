@@ -29,10 +29,11 @@ defmodule Homex.Entity.Light do
   Sets the light state to on
   """
   @callback set_on(entity :: Entity.t()) :: entity :: Entity.t()
+
   @doc """
   Sets the light state to off
   """
-  @callback set_off(entity :: Entity.t()) :: Entity.t()
+  @callback set_off(entity :: Entity.t()) :: entity :: Entity.t()
 
   @doc """
   Sets the lights brightness to the specified value. Must be between 0 and 100
@@ -40,7 +41,7 @@ defmodule Homex.Entity.Light do
   @callback set_brightness(entity :: Entity.t(), brigtness :: float()) :: entity :: Entity.t()
 
   @doc """
-  The intial state for the light
+  Configures the intial state for the light
   """
   @callback handle_init(entity :: Entity.t()) :: {:ok, entity :: Entity.t()}
 
@@ -174,7 +175,7 @@ defmodule Homex.Entity.Light do
 
       def handle_info({@brightness_command_topic, brightness}, entity) do
         with {:ok, value} <- convert_brightness(brightness),
-             entity <- set_brightness(entity, brightness),
+             %Entity{} = entity <- set_brightness(entity, value),
              {:noreply, entity} <- handle_brightness(value, entity) do
           {:noreply, Entity.execute_change(entity)}
         end
