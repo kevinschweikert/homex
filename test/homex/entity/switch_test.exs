@@ -7,12 +7,8 @@ defmodule Homex.Entity.SwitchTest do
   end
 
   describe "behaviour" do
-    test "state topic" do
-      assert TestSwitch.state_topic() == "homex/switch/test_switch"
-    end
-
-    test "command topic" do
-      assert TestSwitch.command_topic() == "homex/switch/test_switch/set"
+    test "platform" do
+      assert TestSwitch.platform() == "switch"
     end
 
     test "config" do

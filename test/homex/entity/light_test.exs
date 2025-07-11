@@ -7,6 +7,10 @@ defmodule Homex.Entity.LightTest do
   end
 
   describe "behaviour" do
+    test "platform" do
+      assert TestLight.platform() == "light"
+    end
+
     test "config" do
       assert TestLight.config() == %{
                platform: "light",
