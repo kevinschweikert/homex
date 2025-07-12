@@ -1,7 +1,7 @@
 defmodule Homex do
   use Supervisor
 
-  def start_link(init_arg) do
+  def start_link(init_arg \\ []) do
     {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
     Supervisor.start_link(__MODULE__, rest, name: name)
   end
