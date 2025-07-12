@@ -17,12 +17,12 @@ defmodule Homex.Entity.Switch do
 
     def handle_on(entity) do
       IO.puts("Switch turned on")
-      {:noreply, entity}
+      entity
     end
 
     def handle_off(entity) do
       IO.puts("Switch turned off")
-      {:noreply, entity}
+      entity
     end
   end
   ```
@@ -42,22 +42,23 @@ defmodule Homex.Entity.Switch do
   @doc """
   Configures the intial state for the switch
   """
-  @callback handle_init(entity :: Entity.t()) :: {:ok, entity :: Entity.t()}
+  @callback handle_init(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   Gets called when the command topic receieves an `on_payload`
   """
-  @callback handle_on(entity :: Entity.t()) :: {:noreply, entity :: Entity.t()}
+  @callback handle_on(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   Gets called when the command topic receieves an `off_payload`
   """
-  @callback handle_off(entity :: Entity.t()) :: {:noreply, entity :: Entity.t()}
+  @callback handle_off(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
   """
-  @callback handle_timer(entity :: Entity.t()) :: {:noreply, Entity.t()}
+  @callback handle_timer(entity :: Entity.t()) ::
+              entity :: Entity.t() | {:error, reason :: term()}
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
@@ -112,9 +113,9 @@ defmodule Homex.Entity.Switch do
           %Entity{}
           |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
 
-        with {:ok, entity} <- handle_init(entity) do
-          {:ok, Entity.execute_change(entity)}
-        end
+        entity
+        |> handle_init()
+        |> Entity.execute_from_init()
       end
 
       @impl Homex.Entity.Switch
@@ -129,17 +130,17 @@ defmodule Homex.Entity.Switch do
 
       @impl GenServer
       def handle_info({@command_topic, @on_payload}, entity) do
-        with entity <- set_on(entity),
-             {:noreply, entity} <- handle_on(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> set_on()
+        |> handle_on()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       def handle_info({@command_topic, @off_payload}, entity) do
-        with entity <- set_off(entity),
-             {:noreply, entity} <- handle_off(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> set_off()
+        |> handle_off()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       def handle_info({other_topic, _payload}, entity) when is_binary(other_topic) do
@@ -147,30 +148,22 @@ defmodule Homex.Entity.Switch do
       end
 
       def handle_info(:update, entity) do
-        with {:noreply, entity} <- handle_timer(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> handle_timer()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       @impl Homex.Entity.Switch
-      def handle_init(entity) do
-        {:ok, entity}
-      end
+      def handle_init(entity), do: entity
 
       @impl Homex.Entity.Switch
-      def handle_timer(entity) do
-        {:noreply, entity}
-      end
+      def handle_timer(entity), do: entity
 
       @impl Homex.Entity.Switch
-      def handle_on(entity) do
-        {:noreply, entity}
-      end
+      def handle_on(entity), do: entity
 
       @impl Homex.Entity.Switch
-      def handle_off(entity) do
-        {:noreply, entity}
-      end
+      def handle_off(entity), do: entity
 
       defoverridable handle_on: 1,
                      handle_off: 1,

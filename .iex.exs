@@ -3,16 +3,16 @@ defmodule MySwitch do
 
   def handle_on(entity) do
     IO.puts("Switch turned on")
-    {:noreply, entity}
+    entity
   end
 
   def handle_off(entity) do
     IO.puts("Switch turned off")
-    {:noreply, entity}
+    entity
   end
 
   def handle_timer(entity) do
-    {:noreply, Enum.random([set_on(entity), set_off(entity)])}
+    Enum.random([set_on(entity), set_off(entity)])
   end
 end
 
@@ -23,7 +23,7 @@ defmodule MyTemperature do
     device_class: "temperature"
 
   def handle_timer(entity) do
-    {:noreply, entity |> set_value(Enum.random(-40..40//1))}
+    entity |> set_value(Enum.random(-40..40//1))
   end
 end
 
@@ -34,7 +34,7 @@ defmodule MyHumidity do
     device_class: "humidity"
 
   def handle_timer(entity) do
-    {:noreply, entity |> set_value(Enum.random(20..90//1))}
+    entity |> set_value(Enum.random(20..90//1))
   end
 end
 
@@ -42,6 +42,6 @@ defmodule MyLight do
   use Homex.Entity.Light, name: "my-light"
 
   def handle_init(entity) do
-    {:ok, entity |> set_on() |> set_brightness(50)}
+    entity |> set_on() |> set_brightness(50)
   end
 end

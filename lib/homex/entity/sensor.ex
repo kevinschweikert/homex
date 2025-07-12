@@ -23,7 +23,8 @@ defmodule Homex.Entity.Sensor do
       device_class: "temperature"
 
     def handle_timer(entity) do
-      {:noreply, entity |> set_value(14)}
+      value = Sensor.read()
+      entity |> set_value(value)
     end
   end
   ```
@@ -39,12 +40,13 @@ defmodule Homex.Entity.Sensor do
   @doc """
   Configures the intial state for the sensor
   """
-  @callback handle_init(entity :: Entity.t()) :: {:ok, entity :: Entity.t()}
+  @callback handle_init(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `5000`
   """
-  @callback handle_timer(entity :: Entity.t()) :: {:noreply, Entity.t()}
+  @callback handle_timer(entity :: Entity.t()) ::
+              entity :: Entity.t() | {:error, reason :: term()}
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
@@ -99,9 +101,9 @@ defmodule Homex.Entity.Sensor do
           %Entity{}
           |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
 
-        with {:ok, entity} <- handle_init(entity) do
-          {:ok, Entity.execute_change(entity)}
-        end
+        entity
+        |> handle_init()
+        |> Entity.execute_from_init()
       end
 
       @impl Homex.Entity.Sensor
@@ -115,20 +117,16 @@ defmodule Homex.Entity.Sensor do
       end
 
       def handle_info(:update, entity) do
-        with {:noreply, entity} <- handle_timer(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> handle_timer()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       @impl Homex.Entity.Sensor
-      def handle_init(entity) do
-        {:ok, entity}
-      end
+      def handle_init(entity), do: entity
 
       @impl Homex.Entity.Sensor
-      def handle_timer(entity) do
-        {:noreply, entity}
-      end
+      def handle_timer(entity), do: entity
 
       defoverridable handle_init: 1, handle_timer: 1
     end

@@ -15,9 +15,9 @@ defmodule Homex.Entity.Light do
   defmodule MyLight do
     use Homex.Entity.Light, name: "my-light"
 
-    def handle_brightness(brightness, entity) do
+    def handle_brightness(entity, brightness) do
       IO.puts("Light set to #{brightness}%")
-      {:noreply, entity}
+      entity
     end
   end
   ```
@@ -43,22 +43,23 @@ defmodule Homex.Entity.Light do
   @doc """
   Configures the intial state for the light
   """
-  @callback handle_init(entity :: Entity.t()) :: {:ok, entity :: Entity.t()}
+  @callback handle_init(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   Gets called when the command topic receieves an `on_payload`
   """
-  @callback handle_on(entity :: Entity.t()) :: {:noreply, entity :: Entity.t()}
+  @callback handle_on(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   Gets called when the command topic receieves an `off_payload`
   """
-  @callback handle_off(entity :: Entity.t()) :: {:noreply, entity :: Entity.t()}
+  @callback handle_off(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
+
   @doc """
   Gets called when a new brightness value gets published to the brightness command topic 
   """
-  @callback handle_brightness(brightness :: float(), entity :: Entity.t()) ::
-              {:noreply, entity :: Entity.t()}
+  @callback handle_brightness(entity :: Entity.t(), brightness :: float()) ::
+              entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
   If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
@@ -138,9 +139,9 @@ defmodule Homex.Entity.Light do
             Homex.publish(@brightness_state_topic, val)
           end)
 
-        with {:ok, entity} <- handle_init(entity) do
-          {:ok, Entity.execute_change(entity)}
-        end
+        entity
+        |> handle_init()
+        |> Entity.execute_from_init()
       end
 
       @impl Homex.Entity.Light
@@ -160,24 +161,25 @@ defmodule Homex.Entity.Light do
 
       @impl GenServer
       def handle_info({@command_topic, @on_payload}, entity) do
-        with entity <- set_on(entity),
-             {:noreply, entity} <- handle_on(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> set_on()
+        |> handle_on()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       def handle_info({@command_topic, @off_payload}, entity) do
-        with entity <- set_off(entity),
-             {:noreply, entity} <- handle_off(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> set_off()
+        |> handle_off()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       def handle_info({@brightness_command_topic, brightness}, entity) do
-        with {:ok, value} <- convert_brightness(brightness),
-             %Entity{} = entity <- set_brightness(entity, value),
-             {:noreply, entity} <- handle_brightness(value, entity) do
-          {:noreply, Entity.execute_change(entity)}
+        with {:ok, value} <- convert_brightness(brightness) do
+          entity
+          |> set_brightness(value)
+          |> handle_brightness(value)
+          |> Entity.execute_from_handle_info(entity)
         end
       end
 
@@ -186,9 +188,9 @@ defmodule Homex.Entity.Light do
       end
 
       def handle_info(:update, entity) do
-        with {:noreply, entity} <- handle_timer(entity) do
-          {:noreply, Entity.execute_change(entity)}
-        end
+        entity
+        |> handle_timer()
+        |> Entity.execute_from_handle_info(entity)
       end
 
       @impl Homex.Entity.Light
@@ -197,24 +199,16 @@ defmodule Homex.Entity.Light do
       end
 
       @impl Homex.Entity.Light
-      def handle_timer(entity) do
-        {:noreply, entity}
-      end
+      def handle_timer(entity), do: entity
 
       @impl Homex.Entity.Light
-      def handle_on(entity) do
-        {:noreply, entity}
-      end
+      def handle_on(entity), do: entity
 
       @impl Homex.Entity.Light
-      def handle_off(entity) do
-        {:noreply, entity}
-      end
+      def handle_off(entity), do: entity
 
       @impl Homex.Entity.Light
-      def handle_brightness(brightness, entity) do
-        {:noreply, entity}
-      end
+      def handle_brightness(entity, _brightness), do: entity
 
       defoverridable handle_on: 1,
                      handle_off: 1,
