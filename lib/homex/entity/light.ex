@@ -105,12 +105,11 @@ defmodule Homex.Entity.Light do
 
       @name opts[:name]
       @platform "light"
-      @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
-      @state_topic "homex/#{@platform}/#{@entity_id}"
-      @command_topic "homex/#{@platform}/#{@entity_id}/set"
-      @brightness_state_topic "homex/#{@platform}/#{@entity_id}/brightness"
-      @brightness_command_topic "homex/#{@platform}/#{@entity_id}/brightness/set"
+      @state_topic "homex/#{@platform}/#{@unique_id}"
+      @command_topic "homex/#{@platform}/#{@unique_id}/set"
+      @brightness_state_topic "homex/#{@platform}/#{@unique_id}/brightness"
+      @brightness_command_topic "homex/#{@platform}/#{@unique_id}/brightness/set"
       @on_payload "ON"
       @off_payload "OFF"
       @retain opts[:retain]
@@ -121,7 +120,7 @@ defmodule Homex.Entity.Light do
       def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
       @impl Homex.Entity
-      def entity_id, do: @entity_id
+      def name, do: @name
 
       @impl Homex.Entity
       def unique_id, do: @unique_id
@@ -140,7 +139,7 @@ defmodule Homex.Entity.Light do
           command_topic: @command_topic,
           brightness_state_topic: @brightness_state_topic,
           brightness_command_topic: @brightness_command_topic,
-          name: @entity_id,
+          name: @name,
           unique_id: @unique_id
         }
       end

@@ -1,4 +1,31 @@
 defmodule Homex do
+  use Supervisor
+
+  def start_link(init_arg) do
+    {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
+    Supervisor.start_link(__MODULE__, rest, name: name)
+  end
+
+  @impl Supervisor
+  def init(opts \\ []) do
+    entities = Homex.entities()
+
+    children = [
+      {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
+      {Homex.Manager, opts},
+      {Task, fn -> start_entities(entities) end}
+    ]
+
+    opts = [strategy: :rest_for_one, name: __MODULE__]
+    Supervisor.init(children, opts)
+  end
+
+  defp start_entities(entities) do
+    for entity <- entities do
+      Homex.add_entity(entity)
+    end
+  end
+
   @config_schema [
                    device: [
                      default: [],
@@ -143,33 +170,6 @@ defmodule Homex do
   ```
   """
 
-  use Supervisor
-
-  def start_link(init_arg) do
-    {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
-    Supervisor.start_link(__MODULE__, rest, name: name)
-  end
-
-  @impl Supervisor
-  def init(opts \\ []) do
-    entities = entities()
-
-    children = [
-      {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
-      {Homex.Manager, opts},
-      {Task, fn -> start_entities(entities) end}
-    ]
-
-    opts = [strategy: :rest_for_one, name: __MODULE__]
-    Supervisor.init(children, opts)
-  end
-
-  defp start_entities(entities) do
-    for entity <- entities do
-      Homex.add_entity(entity)
-    end
-  end
-
   defdelegate connected?(), to: Homex.Manager
   defdelegate publish(topic, payload, opts), to: Homex.Manager
   defdelegate add_entity(module), to: Homex.Manager
@@ -185,28 +185,28 @@ defmodule Homex do
   """
   @spec unique_id(String.t(), String.t()) :: String.t()
   def unique_id(platform, name) do
-    "#{platform}_#{entity_id(name)}_#{:erlang.phash2({platform, name})}"
+    "#{platform}_#{escape(name)}_#{:erlang.phash2({platform, name})}"
   end
 
   @doc """
-  Generates an escaped string from the entity name
+  Generates an escaped string
 
   ## Example
 
-      iex> Homex.entity_id("my-entity!?")
+      iex> Homex.escape("my-entity!?")
       "my_entity"
 
-      iex> Homex.entity_id("--my-entity--")
+      iex> Homex.escape("--my-entity--")
       "my_entity"
 
-      iex> Homex.entity_id("my         entity")
+      iex> Homex.escape("my         entity")
       "my_entity"
 
-      iex> Homex.entity_id("_my entity_")
+      iex> Homex.escape("_my entity_")
       "my_entity"
   """
-  @spec entity_id(String.t()) :: String.t()
-  def entity_id(name) when is_binary(name) do
+  @spec escape(String.t()) :: String.t()
+  def escape(name) when is_binary(name) do
     name
     |> String.downcase()
     |> String.replace(~r/[^a-z0-9]+/, "_")

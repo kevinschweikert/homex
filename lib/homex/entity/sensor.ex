@@ -91,9 +91,8 @@ defmodule Homex.Entity.Sensor do
 
       @name opts[:name]
       @platform "sensor"
-      @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
-      @state_topic "homex/#{@platform}/#{@entity_id}"
+      @state_topic "homex/#{@platform}/#{@unique_id}"
       @update_interval opts[:update_interval]
       @unit_of_measurement opts[:unit_of_measurement]
       @device_class opts[:device_class]
@@ -105,7 +104,7 @@ defmodule Homex.Entity.Sensor do
       def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
       @impl Homex.Entity
-      def entity_id, do: @entity_id
+      def name, do: @name
 
       @impl Homex.Entity
       def unique_id, do: @unique_id
@@ -121,7 +120,7 @@ defmodule Homex.Entity.Sensor do
         %{
           platform: @platform,
           state_topic: @state_topic,
-          name: @entity_id,
+          name: @name,
           unique_id: @unique_id,
           device_class: @device_class,
           unit_of_measurement: @unit_of_measurement,

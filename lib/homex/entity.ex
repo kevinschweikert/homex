@@ -117,8 +117,8 @@ defmodule Homex.Entity do
     {:stop, :unknown, entity}
   end
 
-  @doc "The escaped name of the entity"
-  @callback entity_id() :: String.t()
+  @doc "The given name of the entity"
+  @callback name() :: String.t()
 
   @doc "The unique id of the entity"
   @callback unique_id() :: String.t()

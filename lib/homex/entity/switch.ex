@@ -86,10 +86,9 @@ defmodule Homex.Entity.Switch do
 
       @name opts[:name]
       @platform "switch"
-      @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
-      @state_topic "homex/#{@platform}/#{@entity_id}"
-      @command_topic "homex/#{@platform}/#{@entity_id}/set"
+      @state_topic "homex/#{@platform}/#{@unique_id}"
+      @command_topic "homex/#{@platform}/#{@unique_id}/set"
       @on_payload "ON"
       @off_payload "OFF"
       @update_interval opts[:update_interval]
@@ -100,7 +99,7 @@ defmodule Homex.Entity.Switch do
       def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
       @impl Homex.Entity
-      def entity_id, do: @entity_id
+      def name, do: @name
 
       @impl Homex.Entity
       def unique_id, do: @unique_id
@@ -117,7 +116,7 @@ defmodule Homex.Entity.Switch do
           platform: @platform,
           state_topic: @state_topic,
           command_topic: @command_topic,
-          name: @entity_id,
+          name: @name,
           unique_id: @unique_id
         }
       end
