@@ -27,8 +27,9 @@ defmodule Homex.Manager do
 
   @type pubopt() :: {:retain, boolean()} | {:qos, qos() | qos_name()}
 
-  def status do
-    GenServer.call(__MODULE__, :status)
+  @spec connected?() :: boolean()
+  def connected? do
+    GenServer.call(__MODULE__, :is_connected)
   end
 
   @doc """
@@ -124,9 +125,8 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
-  def handle_call(:status, _from, %__MODULE__{connected: connected} = state) do
-    status = if(connected, do: :connected, else: :disconnected)
-    {:reply, status, state}
+  def handle_call(:is_connected, _from, %__MODULE__{connected: connected} = state) do
+    {:reply, connected, state}
   end
 
   def handle_call({:add_entity, module}, _from, %__MODULE__{entities: entities} = state) do
@@ -135,7 +135,7 @@ defmodule Homex.Manager do
       entities = [module | entities]
 
       publish_discovery_config()
-      Logger.info("added entity #{module.entity_id()}")
+      Logger.info("added entity #{module.name()}")
 
       {:reply, :ok, %{state | entities: entities}}
     else
@@ -159,7 +159,7 @@ defmodule Homex.Manager do
       unsubscribe(module.subscriptions())
       entities = entities -- [module]
 
-      Logger.info("removed entity #{module.entity_id()}")
+      Logger.info("removed entity #{module.name()}")
       publish_discovery_config()
 
       {:reply, :ok,
@@ -201,7 +201,7 @@ defmodule Homex.Manager do
     discovery_config = Homex.discovery_config(components)
 
     topic =
-      "#{Homex.discovery_prefix()}/device/#{Homex.entity_id(discovery_config.device.name)}/config"
+      "#{Homex.discovery_prefix()}/device/#{Homex.escape(discovery_config.device.name)}/config"
 
     payload = Jason.encode!(discovery_config)
 

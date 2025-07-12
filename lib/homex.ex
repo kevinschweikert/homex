@@ -170,7 +170,7 @@ defmodule Homex do
     end
   end
 
-  defdelegate status(), do: Homex.Manager
+  defdelegate connected?(), to: Homex.Manager
   defdelegate publish(topic, payload, opts), to: Homex.Manager
   defdelegate add_entity(module), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
