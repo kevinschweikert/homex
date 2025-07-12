@@ -115,7 +115,6 @@ defmodule Homex.Manager do
     Process.flag(:trap_exit, true)
 
     send(self(), :connect)
-    publish_discovery_config()
 
     {:ok,
      %__MODULE__{
@@ -171,6 +170,16 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
+  def handle_cast(
+        _,
+        %__MODULE__{
+          connected: false
+        } = state
+      ) do
+    Logger.warning("MQTT client not connected")
+    {:noreply, state}
+  end
+
   def handle_cast(
         :publish_discovery_config,
         %__MODULE__{
@@ -238,7 +247,7 @@ defmodule Homex.Manager do
   end
 
   def handle_cast(_, %__MODULE__{connected: false} = state) do
-    Logger.error("emqtt not connected!")
+    Logger.error("MQTT client not connected!")
     {:noreply, state}
   end
 
@@ -258,26 +267,19 @@ defmodule Homex.Manager do
         %__MODULE__{emqtt_pid: nil, emqtt_opts: emqtt_opts, subscriptions: subscriptions} = state
       ) do
     {:ok, emqtt_pid} = :emqtt.start_link(emqtt_opts)
-    {:ok, _} = :emqtt.connect(emqtt_pid)
 
-    for topic <- subscriptions do
-      subscribe(topic)
-    end
+    connected = connect(emqtt_pid, subscriptions)
 
-    {:noreply, %{state | emqtt_pid: emqtt_pid, connected: true}}
+    {:noreply, %{state | emqtt_pid: emqtt_pid, connected: connected}}
   end
 
   def handle_info(
         :connect,
         %__MODULE__{emqtt_pid: emqtt_pid, subscriptions: subscriptions} = state
       ) do
-    {:ok, _} = :emqtt.connect(emqtt_pid)
+    connected = connect(emqtt_pid, subscriptions)
 
-    for topic <- subscriptions do
-      subscribe(topic)
-    end
-
-    {:noreply, %{state | connected: true}}
+    {:noreply, %{state | connected: connected}}
   end
 
   def handle_info({:connected, _}, state) do
@@ -285,12 +287,30 @@ defmodule Homex.Manager do
   end
 
   def handle_info({:EXIT, emqtt_pid, reason}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
-    Logger.warning("emqtt crashed #{inspect(reason)}")
+    Logger.warning("MQTT client stopped #{inspect(reason)}")
     {:noreply, %{state | connected: false, emqtt_pid: nil}}
   end
 
   def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
-    Logger.warning("emqtt disconnected")
+    Logger.warning("MQTT client disconnected")
     {:noreply, %{state | connected: false}}
+  end
+
+  @spec connect(pid(), [String.t()]) :: boolean()
+  defp connect(pid, subscriptions) when is_pid(pid) and is_list(subscriptions) do
+    case :emqtt.connect(pid) do
+      {:ok, _} ->
+        publish_discovery_config()
+
+        for topic <- subscriptions do
+          subscribe(topic)
+        end
+
+        true
+
+      {:error, _} ->
+        Process.send_after(self(), :connect, 10_000)
+        false
+    end
   end
 end
