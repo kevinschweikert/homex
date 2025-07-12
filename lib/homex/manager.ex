@@ -108,6 +108,7 @@ defmodule Homex.Manager do
   def init(_init_arg \\ []) do
     emqtt_opts = Homex.emqtt_options()
     Logger.put_application_level(:emqtt, :info)
+    Process.flag(:trap_exit, true)
 
     send(self(), :connect)
     publish_discovery_config()
