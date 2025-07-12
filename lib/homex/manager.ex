@@ -27,6 +27,10 @@ defmodule Homex.Manager do
 
   @type pubopt() :: {:retain, boolean()} | {:qos, qos() | qos_name()}
 
+  def status do
+    GenServer.call(__MODULE__, :status)
+  end
+
   @doc """
   Let's you publish additional messages to a topic
   """
@@ -121,6 +125,11 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
+  def handle_call(:status, _from, %__MODULE__{connected: connected} = state) do
+    status = if(connected, do: :connected, else: :disconnected)
+    {:reply, status, state}
+  end
+
   def handle_call({:add_entity, module}, _from, %__MODULE__{entities: entities} = state) do
     with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
       subscribe(module.subscriptions())
