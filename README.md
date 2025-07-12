@@ -29,12 +29,12 @@ defmodule MySwitch do
 
   def handle_on(entity) do
     IO.puts("Switch turned on")
-    {:noreply, entity}
+    entity
   end
 
   def handle_off(entity) do
     IO.puts("Switch turned off")
-    {:noreply, entity}
+    entity
   end
 end
 ```
