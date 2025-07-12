@@ -83,10 +83,11 @@ defmodule Homex.Entity.Switch do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Switch
+      import Homex.Entity
 
       @name opts[:name]
       @platform "switch"
-      @unique_id Homex.unique_id(@platform, @name)
+      @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
       @state_topic "homex/#{@platform}/#{@unique_id}"
       @command_topic "homex/#{@platform}/#{@unique_id}/set"
       @on_payload "ON"

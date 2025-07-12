@@ -180,12 +180,13 @@ defmodule Homex do
 
   ## Example
 
-      iex> Homex.unique_id("switch", "my-entity")
-      "switch_my_entity_91165224"
+      iex> Homex.unique_id("my_entity", ["switch", MySwitch])
+      "my_entity_125806526"
   """
-  @spec unique_id(String.t(), String.t()) :: String.t()
-  def unique_id(platform, name) do
-    "#{platform}_#{escape(name)}_#{:erlang.phash2({platform, name})}"
+  @spec unique_id(String.t(), [term()]) :: String.t()
+  def unique_id(name, identifiers) do
+    escaped = escape(name)
+    "#{escaped}_#{:erlang.phash2([escaped | identifiers])}"
   end
 
   @doc """

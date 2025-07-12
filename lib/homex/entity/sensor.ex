@@ -88,10 +88,11 @@ defmodule Homex.Entity.Sensor do
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Sensor
+      import Homex.Entity
 
       @name opts[:name]
       @platform "sensor"
-      @unique_id Homex.unique_id(@platform, @name)
+      @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
       @state_topic "homex/#{@platform}/#{@unique_id}"
       @update_interval opts[:update_interval]
       @unit_of_measurement opts[:unit_of_measurement]

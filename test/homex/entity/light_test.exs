@@ -11,15 +11,18 @@ defmodule Homex.Entity.LightTest do
       assert TestLight.platform() == "light"
     end
 
+    test "subscriptions" do
+      assert TestLight.subscriptions() == ["homex/light/test_light_22353644/set"]
+    end
+
     test "config" do
       assert TestLight.config() == %{
                platform: "light",
-               state_topic: "homex/light/test_light",
-               command_topic: "homex/light/test_light/set",
-               brightness_state_topic: "homex/light/test_light/brightness",
-               brightness_command_topic: "homex/light/test_light/brightness/set",
-               name: "test_light",
-               unique_id: "light_test_light_49938759"
+               state_topic: "homex/light/test_light_22353644",
+               command_topic: "homex/light/test_light_22353644/set",
+               name: "test-light",
+               unique_id: "test_light_22353644"
+             }
              }
     end
   end
