@@ -35,7 +35,7 @@ defmodule Homex.Entity.LightTest do
 
       assert TestLightBrightness.config() == %{
                platform: "light",
-               state_topic: "homex/light/test_light_brightness_10362760",
+               state_topic: "homex/light/test_light_brightness_103627608",
                command_topic: "homex/light/test_light_brightness_103627608/set",
                brightness_state_topic: "homex/light/test_light_brightness_103627608/brightness",
                brightness_command_topic:
