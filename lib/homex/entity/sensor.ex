@@ -1,4 +1,43 @@
 defmodule Homex.Entity.Sensor do
+  @opts_schema [
+                 name: [required: true, type: :string, doc: "the name of the entity"],
+                 update_interval: [
+                   required: false,
+                   type: {:or, [:atom, :integer]},
+                   default: 10_000,
+                   doc:
+                     "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
+                 ],
+                 retain: [
+                   required: false,
+                   type: :boolean,
+                   default: false,
+                   doc: "if the last state should be retained"
+                 ],
+                 state_class: [
+                   required: false,
+                   type: {:or, [nil, :string]},
+                   default: nil,
+                   doc:
+                     "Type of state. If not `nil`, the sensor is assumed to be numerical and will be displayed as a line-chart in the frontend instead of as discrete values."
+                 ],
+                 device_class: [
+                   required: false,
+                   type: {:or, [nil, :string]},
+                   default: nil,
+                   doc:
+                     "Type of sensor. Available device classes: https://developers.home-assistant.io/docs/core/entity/sensor/#available-device-classes"
+                 ],
+                 unit_of_measurement: [
+                   required: false,
+                   default: nil,
+                   type: {:or, [nil, :string]},
+                   doc:
+                     "The unit of measurement that the sensor's value is expressed in. Available units in depending on device class (see second column): https://developers.home-assistant.io/docs/core/entity/sensor/#available-device-classes"
+                 ]
+               ]
+               |> NimbleOptions.new!()
+
   @moduledoc """
   A sensor entity for Homex
 
@@ -6,12 +45,7 @@ defmodule Homex.Entity.Sensor do
 
   Options:
 
-  - `name` (required)
-  - `update_interval`
-  - `unit_of_measurement`
-  - `device_class`
-
-  Available device classes: https://www.home-assistant.io/integrations/sensor#device-class
+  #{NimbleOptions.docs(@opts_schema)}
 
   ## Example
 
@@ -19,7 +53,7 @@ defmodule Homex.Entity.Sensor do
   defmodule MyTemperature do
     use Homex.Entity.Sensor,
       name: "my-temperature",
-      unit_of_measurement: Homex.Unit.temperature(:c),
+      unit_of_measurement: "°C",
       device_class: "temperature"
 
     def handle_timer(entity) do
@@ -49,18 +83,22 @@ defmodule Homex.Entity.Sensor do
               entity :: Entity.t() | {:error, reason :: term()}
 
   defmacro __using__(opts) do
+    opts = NimbleOptions.validate!(opts, @opts_schema)
+
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Sensor
 
-      @name Keyword.fetch!(opts, :name)
+      @name opts[:name]
       @platform "sensor"
       @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
       @state_topic "homex/#{@platform}/#{@entity_id}"
-      @update_interval Keyword.get(opts, :update_interval, 5000)
+      @update_interval opts[:update_interval]
       @unit_of_measurement opts[:unit_of_measurement]
       @device_class opts[:device_class]
+      @state_class opts[:state_class]
+      @retain opts[:retain]
 
       use GenServer
 
@@ -86,8 +124,10 @@ defmodule Homex.Entity.Sensor do
           name: @entity_id,
           unique_id: @unique_id,
           device_class: @device_class,
-          unit_of_measurement: @unit_of_measurement
+          unit_of_measurement: @unit_of_measurement,
+          state_class: @state_class
         }
+        |> Map.reject(fn {_key, val} -> is_nil(val) end)
       end
 
       @impl GenServer
@@ -99,7 +139,9 @@ defmodule Homex.Entity.Sensor do
 
         entity =
           %Entity{}
-          |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
+          |> Entity.register_handler(:state, fn val ->
+            Homex.publish(@state_topic, val, retain: @retain)
+          end)
 
         entity
         |> handle_init()

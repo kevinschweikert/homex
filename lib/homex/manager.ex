@@ -21,25 +21,32 @@ defmodule Homex.Manager do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
 
+  @type qos() :: 0 | 1 | 2
+
+  @type qos_name() :: :qos0 | :at_most_once | :qos1 | :at_least_once | :qos2 | :exactly_once
+
+  @type pubopt() :: {:retain, boolean()} | {:qos, qos() | qos_name()}
+
   @doc """
   Let's you publish additional messages to a topic
   """
-  @spec publish(String.t(), binary() | map()) ::
+  @spec publish(String.t(), binary() | map(), [pubopt()]) ::
           :ok | {:error, Jason.EncodeError.t() | Exception.t()}
-  def publish(topic, payload)
 
-  def publish(topic, payload) when is_binary(payload) do
-    do_publish(topic, payload)
+  def publish(topic, payload, opts \\ [])
+
+  def publish(topic, payload, opts) when is_binary(payload) do
+    do_publish(topic, payload, opts)
   end
 
-  def publish(topic, payload) do
+  def publish(topic, payload, opts) do
     with {:ok, payload} <- Jason.encode(payload) do
-      do_publish(topic, payload)
+      do_publish(topic, payload, opts)
     end
   end
 
-  defp do_publish(topic, payload) do
-    GenServer.cast(__MODULE__, {:publish, topic, payload})
+  defp do_publish(topic, payload, opts) do
+    GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
   end
 
   @spec publish_discovery_config() :: :ok
@@ -179,15 +186,15 @@ defmodule Homex.Manager do
 
     payload = Jason.encode!(discovery_config)
 
-    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, []) do
+    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, retain: true) do
       Logger.debug("published discovery config")
     end
 
     {:noreply, %{state | entities_to_remove: []}}
   end
 
-  def handle_cast({:publish, topic, payload}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
-    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, []) do
+  def handle_cast({:publish, topic, payload, opts}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
+    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
       Logger.debug("published #{payload} to #{topic}")
     end
 

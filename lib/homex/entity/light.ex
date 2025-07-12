@@ -1,13 +1,30 @@
 defmodule Homex.Entity.Light do
-  @moduledoc ~S"""
+  @opts_schema [
+                 name: [required: true, type: :string, doc: "the name of the entity"],
+                 update_interval: [
+                   required: false,
+                   type: {:or, [:atom, :integer]},
+                   default: :never,
+                   doc:
+                     "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
+                 ],
+                 retain: [
+                   required: false,
+                   type: :boolean,
+                   default: true,
+                   doc: "if the last state should be retained"
+                 ]
+               ]
+               |> NimbleOptions.new!()
+
+  @moduledoc """
   A light entity for Homex
 
   https://www.home-assistant.io/integrations/light.mqtt/
 
   Options:
 
-  - `name` (required)
-  - `update_interval` (milliseconds)
+  #{NimbleOptions.docs(@opts_schema)}
 
   ## Example
 
@@ -16,7 +33,7 @@ defmodule Homex.Entity.Light do
     use Homex.Entity.Light, name: "my-light"
 
     def handle_brightness(entity, brightness) do
-      IO.puts("Light set to #{brightness}%")
+      IO.puts("Light set to \#{brightness}%")
       entity
     end
   end
@@ -79,12 +96,14 @@ defmodule Homex.Entity.Light do
   end
 
   defmacro __using__(opts) do
+    opts = NimbleOptions.validate!(opts, @opts_schema)
+
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Light
       import Homex.Entity.Light
 
-      @name Keyword.fetch!(opts, :name)
+      @name opts[:name]
       @platform "light"
       @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
@@ -92,9 +111,10 @@ defmodule Homex.Entity.Light do
       @command_topic "homex/#{@platform}/#{@entity_id}/set"
       @brightness_state_topic "homex/#{@platform}/#{@entity_id}/brightness"
       @brightness_command_topic "homex/#{@platform}/#{@entity_id}/brightness/set"
-      @update_interval Keyword.get(opts, :update_interval, :never)
       @on_payload "ON"
       @off_payload "OFF"
+      @retain opts[:retain]
+      @update_interval opts[:update_interval]
 
       use GenServer
 
@@ -134,9 +154,11 @@ defmodule Homex.Entity.Light do
 
         entity =
           %Entity{}
-          |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
+          |> Entity.register_handler(:state, fn val ->
+            Homex.publish(@state_topic, val, retain: @retain)
+          end)
           |> Entity.register_handler(:brightness, fn val ->
-            Homex.publish(@brightness_state_topic, val)
+            Homex.publish(@brightness_state_topic, val, retain: @retain)
           end)
 
         entity

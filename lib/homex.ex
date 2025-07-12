@@ -144,7 +144,7 @@ defmodule Homex do
   """
 
   defdelegate start_link(opts \\ []), to: Homex.Supervisor
-  defdelegate publish(topic, payload), to: Homex.Manager
+  defdelegate publish(topic, payload, opts), to: Homex.Manager
   defdelegate add_entity(module), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
 

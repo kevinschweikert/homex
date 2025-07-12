@@ -1,4 +1,22 @@
 defmodule Homex.Entity.Switch do
+  @opts_schema [
+                 name: [required: true, type: :string, doc: "the name of the entity"],
+                 update_interval: [
+                   required: false,
+                   type: {:or, [:atom, :integer]},
+                   default: :never,
+                   doc:
+                     "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
+                 ],
+                 retain: [
+                   required: false,
+                   type: :boolean,
+                   default: true,
+                   doc: "if the last state should be retained"
+                 ]
+               ]
+               |> NimbleOptions.new!()
+
   @moduledoc """
   A switch entity for Homex
 
@@ -6,8 +24,7 @@ defmodule Homex.Entity.Switch do
 
   Options:
 
-  - `name` (required)
-  - `update_interval`
+  #{NimbleOptions.docs(@opts_schema)}
 
   ## Example
 
@@ -61,11 +78,13 @@ defmodule Homex.Entity.Switch do
               entity :: Entity.t() | {:error, reason :: term()}
 
   defmacro __using__(opts) do
+    opts = NimbleOptions.validate!(opts, @opts_schema)
+
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Switch
 
-      @name Keyword.fetch!(opts, :name)
+      @name opts[:name]
       @platform "switch"
       @entity_id Homex.entity_id(@name)
       @unique_id Homex.unique_id(@platform, @name)
@@ -73,7 +92,8 @@ defmodule Homex.Entity.Switch do
       @command_topic "homex/#{@platform}/#{@entity_id}/set"
       @on_payload "ON"
       @off_payload "OFF"
-      @update_interval Keyword.get(opts, :update_interval, :never)
+      @update_interval opts[:update_interval]
+      @retain opts[:retain]
 
       use GenServer
 
@@ -111,7 +131,9 @@ defmodule Homex.Entity.Switch do
 
         entity =
           %Entity{}
-          |> Entity.register_handler(:state, fn val -> Homex.publish(@state_topic, val) end)
+          |> Entity.register_handler(:state, fn val ->
+            Homex.publish(@state_topic, val, retain: @retain)
+          end)
 
         entity
         |> handle_init()

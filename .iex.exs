@@ -19,7 +19,7 @@ end
 defmodule MyTemperature do
   use Homex.Entity.Sensor,
     name: "my-temperature",
-    unit_of_measurement: Homex.Unit.temperature(:c),
+    unit_of_measurement: "°C",
     device_class: "temperature"
 
   def handle_timer(entity) do
@@ -30,7 +30,7 @@ end
 defmodule MyHumidity do
   use Homex.Entity.Sensor,
     name: "my-humidiy",
-    unit_of_measurement: Homex.Unit.humidity(),
+    unit_of_measurement: "%",
     device_class: "humidity"
 
   def handle_timer(entity) do
