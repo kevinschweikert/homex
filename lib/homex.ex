@@ -49,7 +49,7 @@ defmodule Homex do
                      doc:
                        "if changed in Homeassistant you also need to change it here to enable autodiscovery. The default works for a standard installation"
                    ],
-                   qos: [required: false, type: :integer, default: 1],
+                   qos: [required: false, type: :integer, default: 0],
                    entities: [required: false, default: [], type: {:list, :atom}],
                    broker: [
                      required: false,
@@ -143,7 +143,33 @@ defmodule Homex do
   ```
   """
 
-  defdelegate start_link(opts \\ []), to: Homex.Supervisor
+  use Supervisor
+
+  def start_link(init_arg) do
+    {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
+    Supervisor.start_link(__MODULE__, rest, name: name)
+  end
+
+  @impl Supervisor
+  def init(opts \\ []) do
+    entities = entities()
+
+    children = [
+      {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
+      {Homex.Manager, opts},
+      {Task, fn -> start_entities(entities) end}
+    ]
+
+    opts = [strategy: :rest_for_one, name: __MODULE__]
+    Supervisor.init(children, opts)
+  end
+
+  defp start_entities(entities) do
+    for entity <- entities do
+      Homex.add_entity(entity)
+    end
+  end
+
   defdelegate publish(topic, payload, opts), to: Homex.Manager
   defdelegate add_entity(module), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
