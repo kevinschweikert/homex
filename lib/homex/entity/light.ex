@@ -1,4 +1,5 @@
 defmodule Homex.Entity.Light do
+  @implemented_modes [:brightness]
   @opts_schema [
                  name: [required: true, type: :string, doc: "the name of the entity"],
                  update_interval: [
@@ -7,6 +8,13 @@ defmodule Homex.Entity.Light do
                    default: :never,
                    doc:
                      "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
+                 ],
+                 modes: [
+                   required: false,
+                   default: [],
+                   type: {:custom, __MODULE__, :modes, []},
+                   doc:
+                     "a list of supported light modes. Available: [#{@implemented_modes |> Enum.map(fn mode -> "`#{mode}`" end) |> Enum.join(", ")}]"
                  ],
                  retain: [
                    required: false,
@@ -39,6 +47,17 @@ defmodule Homex.Entity.Light do
   end
   ```
   """
+  def modes(mode) when mode in @implemented_modes, do: {:ok, [mode]}
+  def modes(mode) when is_atom(mode), do: {:error, :not_implemented}
+
+  def modes(modes) when is_list(modes) do
+    if Enum.all?(modes, fn mode -> mode in @implemented_modes end) do
+      {:ok, modes}
+    else
+      not_implemented = Enum.reject(modes, fn mode -> mode in @implemented_modes end)
+      {:error, "Not implemented modes #{Enum.join(not_implemented, ", ")} found"}
+    end
+  end
 
   alias Homex.Entity
 
@@ -95,21 +114,40 @@ defmodule Homex.Entity.Light do
     end
   end
 
+  @doc false
+  def mode_or(modes, mode, term, default \\ nil) do
+    if mode in modes do
+      term
+    else
+      default
+    end
+  end
+
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @opts_schema)
 
     quote bind_quoted: [opts: opts], generated: true do
       @behaviour Homex.Entity
       @behaviour Homex.Entity.Light
+      import Homex.Entity
       import Homex.Entity.Light
 
       @name opts[:name]
+      @modes opts[:modes]
       @platform "light"
       @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
       @state_topic "homex/#{@platform}/#{@unique_id}"
       @command_topic "homex/#{@platform}/#{@unique_id}/set"
-      @brightness_state_topic "homex/#{@platform}/#{@unique_id}/brightness"
-      @brightness_command_topic "homex/#{@platform}/#{@unique_id}/brightness/set"
+      @brightness_state_topic mode_or(
+                                @modes,
+                                :brightness,
+                                "homex/#{@platform}/#{@unique_id}/brightness"
+                              )
+      @brightness_command_topic mode_or(
+                                  @modes,
+                                  :brightness,
+                                  "homex/#{@platform}/#{@unique_id}/brightness/set"
+                                )
       @on_payload "ON"
       @off_payload "OFF"
       @retain opts[:retain]
@@ -126,7 +164,10 @@ defmodule Homex.Entity.Light do
       def unique_id, do: @unique_id
 
       @impl Homex.Entity
-      def subscriptions, do: [@command_topic, @brightness_command_topic]
+      def subscriptions do
+        [@command_topic, mode_or(@modes, :brightness, @brightness_command_topic, [])]
+        |> List.flatten()
+      end
 
       @impl Homex.Entity
       def platform(), do: @platform
@@ -142,6 +183,7 @@ defmodule Homex.Entity.Light do
           name: @name,
           unique_id: @unique_id
         }
+        |> Map.reject(fn {_key, val} -> is_nil(val) end)
       end
 
       @impl GenServer
