@@ -11,6 +11,7 @@ defmodule Homex.Manager do
   defstruct [
     :emqtt_pid,
     :emqtt_opts,
+    :emqtt_ref,
     connected: false,
     subscriptions: [],
     entities: [],
@@ -51,36 +52,7 @@ defmodule Homex.Manager do
   end
 
   defp do_publish(topic, payload, opts) do
-    GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
-  end
-
-  @spec publish_discovery_config() :: :ok
-  def publish_discovery_config() do
-    GenServer.cast(__MODULE__, :publish_discovery_config)
-  end
-
-  @spec subscribe(String.t() | [String.t()]) :: String.t() | [String.t()]
-  defp subscribe(topics) when is_list(topics) do
-    for topic <- topics do
-      subscribe(topic)
-    end
-  end
-
-  defp subscribe(topic) when is_binary(topic) do
-    GenServer.cast(__MODULE__, {:subscribe, topic})
-    topic
-  end
-
-  @spec unsubscribe(String.t() | [String.t()]) :: String.t() | [String.t()]
-  defp unsubscribe(topics) when is_list(topics) do
-    for topic <- topics do
-      unsubscribe(topic)
-    end
-  end
-
-  defp unsubscribe(topic) when is_binary(topic) do
-    GenServer.cast(__MODULE__, {:unsubscribe, topic})
-    topic
+    GenServer.call(__MODULE__, {:publish, topic, payload, opts})
   end
 
   @doc """
@@ -114,73 +86,37 @@ defmodule Homex.Manager do
     emqtt_opts = Homex.emqtt_options()
     Logger.put_application_level(:emqtt, :info)
     Process.flag(:trap_exit, true)
-
-    send(self(), :connect)
-
-    {:ok,
-     %__MODULE__{
-       emqtt_opts: emqtt_opts,
-       connected: true
-     }}
+    {:ok, %__MODULE__{emqtt_opts: emqtt_opts}, {:continue, :connect}}
   end
 
   @impl GenServer
-  def handle_call(:is_connected, _from, %__MODULE__{connected: connected} = state) do
-    {:reply, connected, state}
-  end
+  def handle_continue(:connect, %__MODULE__{emqtt_opts: emqtt_opts} = state) do
+    with {:ok, pid} <- :emqtt.start_link(emqtt_opts),
+         {:ok, _props} <- :emqtt.connect(pid) do
+      Logger.debug("Connected")
 
-  def handle_call({:add_entity, module}, _from, %__MODULE__{entities: entities} = state) do
-    with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
-      subscribe(module.subscriptions())
-      entities = [module | entities]
-
-      publish_discovery_config()
-      Logger.info("added entity #{module.name()}")
-
-      {:reply, :ok, %{state | entities: entities}}
+      {:noreply, %{state | emqtt_pid: pid, emqtt_ref: Process.monitor(pid), connected: true},
+       {:continue, :subscribe_to_topics}}
     else
-      {:error, error} -> {:reply, {:error, error}, state}
+      {:error, reason} ->
+        Logger.error("Failed to connect to MQTT broker: #{inspect(reason)}")
+        Process.send_after(self(), :reconnect, 5000)
+        {:noreply, state}
     end
   end
 
-  def handle_call(
-        {:remove_entity, module},
-        _from,
-        %__MODULE__{entities: entities, entities_to_remove: entities_to_remove} = state
+  def handle_continue(
+        :subscribe_to_topics,
+        %__MODULE__{emqtt_pid: emqtt_pid, subscriptions: subscriptions} = state
       ) do
-    child =
-      DynamicSupervisor.which_children(Homex.EntitySupervisor)
-      |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, modules} ->
-        module in modules
-      end)
-
-    with {_id, pid, _type, _modules} <- child,
-         :ok <- DynamicSupervisor.terminate_child(Homex.EntitySupervisor, pid) do
-      unsubscribe(module.subscriptions())
-      entities = entities -- [module]
-
-      Logger.info("removed entity #{module.name()}")
-      publish_discovery_config()
-
-      {:reply, :ok,
-       %{state | entities: entities, entities_to_remove: [module | entities_to_remove]}}
-    else
-      {:error, error} -> {:reply, {:error, error}, state}
+    for topic <- subscriptions do
+      :emqtt.subscribe(emqtt_pid, topic)
     end
+
+    {:noreply, state, {:continue, :publish_discovery_config}}
   end
 
-  @impl GenServer
-  def handle_cast(
-        _,
-        %__MODULE__{
-          connected: false
-        } = state
-      ) do
-    Logger.warning("MQTT client not connected")
-    {:noreply, state}
-  end
-
-  def handle_cast(
+  def handle_continue(
         :publish_discovery_config,
         %__MODULE__{
           emqtt_pid: emqtt_pid,
@@ -212,43 +148,89 @@ defmodule Homex.Manager do
     {:noreply, %{state | entities_to_remove: []}}
   end
 
-  def handle_cast({:publish, topic, payload, opts}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
-    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
-      Logger.debug("published #{payload} to #{topic}")
-    end
-
-    {:noreply, state}
+  @impl GenServer
+  def handle_call(:is_connected, _from, %__MODULE__{connected: connected} = state) do
+    {:reply, connected, state}
   end
 
-  def handle_cast(
-        {:subscribe, topic},
-        %__MODULE__{emqtt_pid: emqtt_pid, subscriptions: subscriptions} = state
+  def handle_call(
+        {:add_entity, module},
+        _from,
+        %__MODULE__{emqtt_pid: emqtt_pid, entities: entities, subscriptions: subscriptions} =
+          state
       ) do
-    with {:ok, _, _} <- :emqtt.subscribe(emqtt_pid, topic) do
-      Logger.debug("subscribed to #{topic}")
-      {:noreply, %{state | subscriptions: [topic | subscriptions]}}
+    with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
+      for topic <- module.subscriptions() do
+        :emqtt.subscribe(emqtt_pid, topic)
+      end
+
+      entities = [module | entities]
+      subscriptions = module.subscriptions() ++ subscriptions
+
+      Logger.info("added entity #{module.name()}")
+
+      {:reply, :ok, %{state | entities: entities, subscriptions: subscriptions},
+       {:continue, :publish_discovery_config}}
     else
-      _ ->
-        {:noreply, state}
+      {:error, error} -> {:reply, {:error, error}, state}
     end
   end
 
-  def handle_cast(
-        {:unsubscribe, topic},
-        %__MODULE__{emqtt_pid: emqtt_pid, subscriptions: subscriptions} = state
+  def handle_call(
+        {:remove_entity, module},
+        _from,
+        %__MODULE__{
+          emqtt_pid: emqtt_pid,
+          entities: entities,
+          subscriptions: subscriptions,
+          entities_to_remove: entities_to_remove
+        } = state
       ) do
-    with {:ok, _, _} <- :emqtt.unsubscribe(emqtt_pid, topic) do
-      Logger.debug("unsubscribed from #{topic}")
-      {:noreply, %{state | subscriptions: subscriptions -- [topic]}}
+    child =
+      DynamicSupervisor.which_children(Homex.EntitySupervisor)
+      |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, modules} ->
+        module in modules
+      end)
+
+    with {_id, pid, _type, _modules} <- child,
+         :ok <- DynamicSupervisor.terminate_child(Homex.EntitySupervisor, pid) do
+      for topic <- module.subscriptions() do
+        :emqtt.unsubscribe(emqtt_pid, topic)
+      end
+
+      entities = entities -- [module]
+      subscriptions = subscriptions -- module.subscriptions()
+
+      Logger.info("removed entity #{module.name()}")
+
+      {:reply, :ok,
+       %{
+         state
+         | entities: entities,
+           subscriptions: subscriptions,
+           entities_to_remove: [module | entities_to_remove]
+       }, {:continue, :publish_discovery_config}}
     else
-      _ ->
-        {:noreply, state}
+      {:error, error} -> {:reply, {:error, error}, state}
     end
   end
 
-  def handle_cast(_, %__MODULE__{connected: false} = state) do
-    Logger.error("MQTT client not connected!")
-    {:noreply, state}
+  def handle_call(
+        {:publish, topic, payload, opts},
+        _from,
+        %__MODULE__{emqtt_pid: emqtt_pid, connected: true} = state
+      )
+      when not is_nil(emqtt_pid) do
+    result =
+      with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
+        Logger.debug("published #{payload} to #{topic}")
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(_, _from, %__MODULE__{connected: false} = state) do
+    {:reply, {:error, :not_connected}, state}
   end
 
   # new MQTT message from broker
@@ -263,54 +245,26 @@ defmodule Homex.Manager do
   end
 
   def handle_info(
-        :connect,
-        %__MODULE__{emqtt_pid: nil, emqtt_opts: emqtt_opts, subscriptions: subscriptions} = state
+        {:DOWN, emqtt_ref, :process, _pid, reason},
+        %__MODULE__{emqtt_ref: emqtt_ref} = state
       ) do
-    {:ok, emqtt_pid} = :emqtt.start_link(emqtt_opts)
-
-    connected = connect(emqtt_pid, subscriptions)
-
-    {:noreply, %{state | emqtt_pid: emqtt_pid, connected: connected}}
+    Logger.warning("MQTT client down #{inspect(reason)}")
+    {:noreply, %{state | connected: false, emqtt_pid: nil}, {:continue, :connect}}
   end
 
-  def handle_info(
-        :connect,
-        %__MODULE__{emqtt_pid: emqtt_pid, subscriptions: subscriptions} = state
-      ) do
-    connected = connect(emqtt_pid, subscriptions)
+  def handle_info({:DOWN, _, :process, _reason}, state), do: {:noreply, state}
 
-    {:noreply, %{state | connected: connected}}
+  def handle_info({:EXIT, _pid, _reason}, %__MODULE__{} = state) do
+    {:noreply, state}
   end
 
-  def handle_info({:connected, _}, state) do
-    {:noreply, %{state | connected: true}}
+  def handle_info(:reconnect, state) do
+    {:noreply, state, {:continue, :connect}}
   end
 
-  def handle_info({:EXIT, emqtt_pid, reason}, %__MODULE__{emqtt_pid: emqtt_pid} = state) do
-    Logger.warning("MQTT client stopped #{inspect(reason)}")
-    {:noreply, %{state | connected: false, emqtt_pid: nil}}
-  end
-
-  def handle_info({:disconnected, _, _}, %__MODULE__{} = state) do
-    Logger.warning("MQTT client disconnected")
-    {:noreply, %{state | connected: false}}
-  end
-
-  @spec connect(pid(), [String.t()]) :: boolean()
-  defp connect(pid, subscriptions) when is_pid(pid) and is_list(subscriptions) do
-    case :emqtt.connect(pid) do
-      {:ok, _} ->
-        publish_discovery_config()
-
-        for topic <- subscriptions do
-          subscribe(topic)
-        end
-
-        true
-
-      {:error, _} ->
-        Process.send_after(self(), :connect, 10_000)
-        false
-    end
+  @impl GenServer
+  def terminate(_reason, %__MODULE__{emqtt_pid: emqtt_pid, emqtt_ref: emqtt_ref}) do
+    if emqtt_pid && Process.alive?(emqtt_pid), do: :emqtt.disconnect(emqtt_pid)
+    if is_reference(emqtt_ref), do: Process.demonitor(emqtt_ref)
   end
 end

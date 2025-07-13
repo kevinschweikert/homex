@@ -262,7 +262,7 @@ defmodule Homex do
       |> NimbleOptions.validate!(@config_schema)
 
     [
-      reconnect: :infinity,
+      name: Homex.EMQTT,
       host: String.to_charlist(config[:broker][:host]),
       port: config[:broker][:port],
       username: String.to_charlist(config[:broker][:username]),
