@@ -198,13 +198,29 @@ defmodule Homex.Entity.Light do
           |> Entity.register_handler(:state, fn val ->
             Homex.publish(@state_topic, val, retain: @retain)
           end)
-          |> Entity.register_handler(:brightness, fn val ->
-            Homex.publish(@brightness_state_topic, val, retain: @retain)
-          end)
 
-        entity
-        |> handle_init()
-        |> Entity.execute_from_init()
+        entity =
+          mode_or(
+            @modes,
+            :brightness,
+            Entity.register_handler(entity, :brightness, fn val ->
+              Homex.publish(@brightness_state_topic, val, retain: @retain)
+            end),
+            entity
+          )
+
+        {:ok, entity |> handle_init() |> Entity.execute_change(), {:continue, :register}}
+      end
+
+      @impl GenServer
+      def handle_continue(:register, entity) do
+        Process.flag(:trap_exit, true)
+
+        for topic <- subscriptions() do
+          Registry.register(Homex.SubscriptionRegistry, topic, nil)
+        end
+
+        {:noreply, entity}
       end
 
       @impl Homex.Entity.Light
@@ -224,42 +240,53 @@ defmodule Homex.Entity.Light do
 
       @impl GenServer
       def handle_info({@command_topic, @on_payload}, entity) do
-        entity
-        |> set_on()
-        |> handle_on()
-        |> Entity.execute_from_handle_info(entity)
+        {:noreply,
+         entity
+         |> set_on()
+         |> handle_on()
+         |> Entity.execute_change()}
       end
 
       def handle_info({@command_topic, @off_payload}, entity) do
-        entity
-        |> set_off()
-        |> handle_off()
-        |> Entity.execute_from_handle_info(entity)
+        {:noreply,
+         entity
+         |> set_off()
+         |> handle_off()
+         |> Entity.execute_change()}
+      end
+
+      def handle_info({@command_topic, _}, entity) do
+        {:noreply, entity}
       end
 
       def handle_info({@brightness_command_topic, brightness}, entity) do
         with {:ok, value} <- convert_brightness(brightness) do
-          entity
-          |> set_brightness(value)
-          |> handle_brightness(value)
-          |> Entity.execute_from_handle_info(entity)
+          {:noreply,
+           entity
+           |> set_brightness(value)
+           |> handle_brightness(value)
+           |> Entity.execute_change()}
+        else
+          _ -> {:noreply, entity}
         end
       end
 
-      def handle_info({other_topic, _payload}, entity) when is_binary(other_topic) do
-        {:noreply, entity}
+      def handle_info(:update, entity) do
+        {:noreply,
+         entity
+         |> handle_timer()
+         |> Entity.execute_change()}
       end
 
-      def handle_info(:update, entity) do
-        entity
-        |> handle_timer()
-        |> Entity.execute_from_handle_info(entity)
+      @impl GenServer
+      def terminate(_reason, entity) do
+        for topic <- subscriptions() do
+          Registry.unregister(Homex.SubscriptionRegistry, topic)
+        end
       end
 
       @impl Homex.Entity.Light
-      def handle_init(entity) do
-        {:ok, entity}
-      end
+      def handle_init(entity), do: entity
 
       @impl Homex.Entity.Light
       def handle_timer(entity), do: entity

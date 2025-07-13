@@ -13,6 +13,7 @@ defmodule Homex do
     children = [
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
       {Homex.Manager, opts},
+      {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
       {Task, fn -> start_entities(entities) end}
     ]
 

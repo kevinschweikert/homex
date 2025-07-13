@@ -135,9 +135,18 @@ defmodule Homex.Entity.Switch do
             Homex.publish(@state_topic, val, retain: @retain)
           end)
 
-        entity
-        |> handle_init()
-        |> Entity.execute_from_init()
+        {:ok, entity |> handle_init() |> Entity.execute_change(), {:continue, :register}}
+      end
+
+      @impl GenServer
+      def handle_continue(:register, entity) do
+        Process.flag(:trap_exit, true)
+
+        for topic <- subscriptions() do
+          Registry.register(Homex.SubscriptionRegistry, topic, nil)
+        end
+
+        {:noreply, entity}
       end
 
       @impl Homex.Entity.Switch
@@ -152,27 +161,37 @@ defmodule Homex.Entity.Switch do
 
       @impl GenServer
       def handle_info({@command_topic, @on_payload}, entity) do
-        entity
-        |> set_on()
-        |> handle_on()
-        |> Entity.execute_from_handle_info(entity)
+        {:noreply,
+         entity
+         |> set_on()
+         |> handle_on()
+         |> Entity.execute_change()}
       end
 
       def handle_info({@command_topic, @off_payload}, entity) do
-        entity
-        |> set_off()
-        |> handle_off()
-        |> Entity.execute_from_handle_info(entity)
+        {:noreply,
+         entity
+         |> set_off()
+         |> handle_off()
+         |> Entity.execute_change()}
       end
 
-      def handle_info({other_topic, _payload}, entity) when is_binary(other_topic) do
+      def handle_info({@command_topic, _}, entity) do
         {:noreply, entity}
       end
 
       def handle_info(:update, entity) do
-        entity
-        |> handle_timer()
-        |> Entity.execute_from_handle_info(entity)
+        {:noreply,
+         entity
+         |> handle_timer()
+         |> Entity.execute_change()}
+      end
+
+      @impl GenServer
+      def terminate(_reason, entity) do
+        for topic <- subscriptions() do
+          Registry.unregister(Homex.SubscriptionRegistry, topic)
+        end
       end
 
       @impl Homex.Entity.Switch

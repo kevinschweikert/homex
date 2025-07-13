@@ -39,9 +39,25 @@ defmodule MyHumidity do
 end
 
 defmodule MyLight do
+  # , modes: [:brightness]
   use Homex.Entity.Light, name: "my-light"
 
   def handle_init(entity) do
     entity |> set_on() |> set_brightness(50)
+  end
+
+  def handle_on(entity) do
+    IO.puts("Light turned on")
+    entity
+  end
+
+  def handle_off(entity) do
+    IO.puts("Light turned off")
+    entity
+  end
+
+  def handle_brightness(entity, brightness) do
+    IO.puts("Light at #{brightness}")
+    entity
   end
 end

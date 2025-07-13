@@ -41,7 +41,7 @@ defmodule Homex.Entity do
       changes = Map.put(changes, key, value)
       %{entity | changes: changes}
     else
-      {:error, :badkey}
+      entity
     end
   end
 
@@ -81,40 +81,6 @@ defmodule Homex.Entity do
   @spec get_private(t(), atom()) :: term()
   def get_private(%__MODULE__{private: private}, key) when is_atom(key) do
     Map.get(private, key)
-  end
-
-  @doc false
-  def execute_from_init(%__MODULE__{} = entity) do
-    {:ok, execute_change(entity)}
-  end
-
-  def execute_from_init({:ok, %__MODULE__{} = entity}) do
-    {:ok, execute_change(entity)}
-  end
-
-  def execute_from_init({:error, reason}) do
-    {:stop, reason}
-  end
-
-  def execute_from_init(_) do
-    {:stop, :unknown}
-  end
-
-  @doc false
-  def execute_from_handle_info(%__MODULE__{} = entity, _) do
-    {:noreply, execute_change(entity)}
-  end
-
-  def execute_from_handle_info({:noreply, %__MODULE__{} = entity}, _) do
-    {:noreply, execute_change(entity)}
-  end
-
-  def execute_from_handle_info({:error, reason}, entity) do
-    {:stop, reason, entity}
-  end
-
-  def execute_from_handle_info(_, entity) do
-    {:stop, :unknown, entity}
   end
 
   @doc "The given name of the entity"

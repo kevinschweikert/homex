@@ -143,9 +143,18 @@ defmodule Homex.Entity.Sensor do
             Homex.publish(@state_topic, val, retain: @retain)
           end)
 
-        entity
-        |> handle_init()
-        |> Entity.execute_from_init()
+        {:ok, entity |> handle_init() |> Entity.execute_change(), {:continue, :register}}
+      end
+
+      @impl GenServer
+      def handle_continue(:register, entity) do
+        Process.flag(:trap_exit, true)
+
+        for topic <- subscriptions() do
+          Registry.register(Homex.SubscriptionRegistry, topic, nil)
+        end
+
+        {:noreply, entity}
       end
 
       @impl Homex.Entity.Sensor
@@ -154,14 +163,18 @@ defmodule Homex.Entity.Sensor do
       end
 
       @impl GenServer
-      def handle_info({other_topic, _payload}, state) when is_binary(other_topic) do
-        {:noreply, state}
+      def handle_info(:update, entity) do
+        {:noreply,
+         entity
+         |> handle_timer()
+         |> Entity.execute_change()}
       end
 
-      def handle_info(:update, entity) do
-        entity
-        |> handle_timer()
-        |> Entity.execute_from_handle_info(entity)
+      @impl GenServer
+      def terminate(_reason, entity) do
+        for topic <- subscriptions() do
+          Registry.unregister(Homex.SubscriptionRegistry, topic)
+        end
       end
 
       @impl Homex.Entity.Sensor
