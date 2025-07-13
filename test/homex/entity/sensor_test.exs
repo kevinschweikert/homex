@@ -17,9 +17,9 @@ defmodule Homex.Entity.SensorTest do
     test "config" do
       assert TestSensor.config() == %{
                platform: "sensor",
-               state_topic: "homex/sensor/test_sensor_77672062",
+               state_topic: "homex/sensor/#{TestSensor.unique_id()}",
                name: "test-sensor",
-               unique_id: "test_sensor_77672062",
+               unique_id: "#{TestSensor.unique_id()}",
                unit_of_measurement: "°C",
                device_class: "temperature"
              }

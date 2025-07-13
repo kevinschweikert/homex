@@ -92,7 +92,7 @@ defmodule Homex.Entity.Switch do
 
       @name opts[:name]
       @platform "switch"
-      @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
+      @unique_id Homex.unique_id(@name, [@platform])
       @state_topic "homex/#{@platform}/#{@unique_id}"
       @command_topic "homex/#{@platform}/#{@unique_id}/set"
       @on_payload "ON"

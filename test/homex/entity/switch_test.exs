@@ -14,10 +14,10 @@ defmodule Homex.Entity.SwitchTest do
     test "config" do
       assert TestSwitch.config() == %{
                platform: "switch",
-               state_topic: "homex/switch/test_switch_67474687",
-               command_topic: "homex/switch/test_switch_67474687/set",
+               state_topic: "homex/switch/#{TestSwitch.unique_id()}",
+               command_topic: "homex/switch/#{TestSwitch.unique_id()}/set",
                name: "test-switch",
-               unique_id: "test_switch_67474687"
+               unique_id: "#{TestSwitch.unique_id()}"
              }
     end
   end

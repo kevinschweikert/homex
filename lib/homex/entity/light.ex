@@ -142,7 +142,7 @@ defmodule Homex.Entity.Light do
       @name opts[:name]
       @modes opts[:modes]
       @platform "light"
-      @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
+      @unique_id Homex.unique_id(@name, [@platform])
       @state_topic "homex/#{@platform}/#{@unique_id}"
       @command_topic "homex/#{@platform}/#{@unique_id}/set"
       @brightness_state_topic mode_or(

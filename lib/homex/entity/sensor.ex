@@ -94,7 +94,7 @@ defmodule Homex.Entity.Sensor do
 
       @name opts[:name]
       @platform "sensor"
-      @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
+      @unique_id Homex.unique_id(@name, [@platform])
       @state_topic "homex/#{@platform}/#{@unique_id}"
       @unit_of_measurement opts[:unit_of_measurement]
       @device_class opts[:device_class]

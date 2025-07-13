@@ -16,32 +16,33 @@ defmodule Homex.Entity.LightTest do
     end
 
     test "subscriptions" do
-      assert TestLight.subscriptions() == ["homex/light/test_light_22353644/set"]
+      assert TestLight.subscriptions() == ["homex/light/#{TestLight.unique_id()}/set"]
 
       assert TestLightBrightness.subscriptions() == [
-               "homex/light/test_light_brightness_103627608/set",
-               "homex/light/test_light_brightness_103627608/brightness/set"
+               "homex/light/#{TestLightBrightness.unique_id()}/set",
+               "homex/light/#{TestLightBrightness.unique_id()}/brightness/set"
              ]
     end
 
     test "config" do
       assert TestLight.config() == %{
                platform: "light",
-               state_topic: "homex/light/test_light_22353644",
-               command_topic: "homex/light/test_light_22353644/set",
+               state_topic: "homex/light/#{TestLight.unique_id()}",
+               command_topic: "homex/light/#{TestLight.unique_id()}/set",
                name: "test-light",
-               unique_id: "test_light_22353644"
+               unique_id: "#{TestLight.unique_id()}"
              }
 
       assert TestLightBrightness.config() == %{
                platform: "light",
-               state_topic: "homex/light/test_light_brightness_103627608",
-               command_topic: "homex/light/test_light_brightness_103627608/set",
-               brightness_state_topic: "homex/light/test_light_brightness_103627608/brightness",
+               state_topic: "homex/light/#{TestLightBrightness.unique_id()}",
+               command_topic: "homex/light/#{TestLightBrightness.unique_id()}/set",
+               brightness_state_topic:
+                 "homex/light/#{TestLightBrightness.unique_id()}/brightness",
                brightness_command_topic:
-                 "homex/light/test_light_brightness_103627608/brightness/set",
+                 "homex/light/#{TestLightBrightness.unique_id()}/brightness/set",
                name: "test-light-brightness",
-               unique_id: "test_light_brightness_103627608"
+               unique_id: "#{TestLightBrightness.unique_id()}"
              }
     end
   end
