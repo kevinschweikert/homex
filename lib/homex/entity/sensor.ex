@@ -41,11 +41,25 @@ defmodule Homex.Entity.Sensor do
   @moduledoc """
   A sensor entity for Homex
 
+  Implements a `Homex.Entity`. See module for available callbacks.
+
   https://www.home-assistant.io/integrations/sensor.mqtt/
 
-  Options:
+  ## Options
 
   #{NimbleOptions.docs(@opts_schema)}
+
+  ## Overridable Functions
+
+  The following functions can be overridden in your entity:
+
+  * `handle_init/1` - From `Homex.Entity`
+  * `handle_timer/1` - From `Homex.Entity`
+
+  ### Default Implementations
+
+  All overridable functions have safe default implementations that return the entity unchanged.
+  You only need to override the functions you want to customize.
 
   ## Example
 
@@ -71,38 +85,21 @@ defmodule Homex.Entity.Sensor do
   """
   @callback set_value(entity :: Entity.t(), value :: term()) :: entity :: Entity.t()
 
-  @doc """
-  Configures the intial state for the sensor
-  """
-  @callback handle_init(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
-
-  @doc """
-  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `5000`
-  """
-  @callback handle_timer(entity :: Entity.t()) ::
-              entity :: Entity.t() | {:error, reason :: term()}
-
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @opts_schema)
 
     quote bind_quoted: [opts: opts], generated: true do
-      @behaviour Homex.Entity
+      use Homex.Entity, update_interval: opts[:update_interval]
       @behaviour Homex.Entity.Sensor
-      import Homex.Entity
 
       @name opts[:name]
       @platform "sensor"
       @unique_id Homex.unique_id(@name, [@platform, __MODULE__])
       @state_topic "homex/#{@platform}/#{@unique_id}"
-      @update_interval opts[:update_interval]
       @unit_of_measurement opts[:unit_of_measurement]
       @device_class opts[:device_class]
       @state_class opts[:state_class]
       @retain opts[:retain]
-
-      use GenServer
-
-      def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
       @impl Homex.Entity
       def name, do: @name
@@ -130,31 +127,12 @@ defmodule Homex.Entity.Sensor do
         |> Map.reject(fn {_key, val} -> is_nil(val) end)
       end
 
-      @impl GenServer
-      def init(_init_arg \\ []) do
-        case @update_interval do
-          :never -> :ok
-          time -> :timer.send_interval(time, :update)
-        end
-
-        entity =
-          %Entity{}
-          |> Entity.register_handler(:state, fn val ->
-            Homex.publish(@state_topic, val, retain: @retain)
-          end)
-
-        {:ok, entity |> handle_init() |> Entity.execute_change(), {:continue, :register}}
-      end
-
-      @impl GenServer
-      def handle_continue(:register, entity) do
-        Process.flag(:trap_exit, true)
-
-        for topic <- subscriptions() do
-          Registry.register(Homex.SubscriptionRegistry, topic, nil)
-        end
-
-        {:noreply, entity}
+      @impl Homex.Entity
+      def setup_entity(entity) do
+        entity
+        |> Entity.register_handler(:state, fn val ->
+          Homex.publish(@state_topic, val, retain: @retain)
+        end)
       end
 
       @impl Homex.Entity.Sensor
@@ -162,26 +140,11 @@ defmodule Homex.Entity.Sensor do
         Entity.put_change(entity, :state, value)
       end
 
-      @impl GenServer
-      def handle_info(:update, entity) do
-        {:noreply,
-         entity
-         |> handle_timer()
-         |> Entity.execute_change()}
-      end
+      @impl Homex.Entity
+      def handle_init(entity), do: super(entity)
 
-      @impl GenServer
-      def terminate(_reason, entity) do
-        for topic <- subscriptions() do
-          Registry.unregister(Homex.SubscriptionRegistry, topic)
-        end
-      end
-
-      @impl Homex.Entity.Sensor
-      def handle_init(entity), do: entity
-
-      @impl Homex.Entity.Sensor
-      def handle_timer(entity), do: entity
+      @impl Homex.Entity
+      def handle_timer(entity), do: super(entity)
 
       defoverridable handle_init: 1, handle_timer: 1
     end

@@ -20,11 +20,27 @@ defmodule Homex.Entity.Switch do
   @moduledoc """
   A switch entity for Homex
 
+  Implements a `Homex.Entity`. See module for available callbacks.
+
   Home Assistant docs: https://www.home-assistant.io/integrations/switch.mqtt
 
-  Options:
+  ## Options
 
   #{NimbleOptions.docs(@opts_schema)}
+
+  ## Overridable Functions
+
+  The following functions can be overridden in your entity:
+
+  * `handle_init/1` - From `Homex.Entity`
+  * `handle_timer/1` - From `Homex.Entity`
+  * `handle_on/1` - From `Homex.Entity.Switch`
+  * `handle_off/1` - From `Homex.Entity.Switch`
+
+  ### Default Implementations
+
+  All overridable functions have safe default implementations that return the entity unchanged.
+  You only need to override the functions you want to customize.
 
   ## Example
 
@@ -57,11 +73,6 @@ defmodule Homex.Entity.Switch do
   @callback set_off(entity :: Entity.t()) :: entity :: Entity.t()
 
   @doc """
-  Configures the intial state for the switch
-  """
-  @callback handle_init(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
-
-  @doc """
   Gets called when the command topic receieves an `on_payload`
   """
   @callback handle_on(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
@@ -71,19 +82,13 @@ defmodule Homex.Entity.Switch do
   """
   @callback handle_off(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
-  @doc """
-  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
-  """
-  @callback handle_timer(entity :: Entity.t()) ::
-              entity :: Entity.t() | {:error, reason :: term()}
-
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @opts_schema)
 
     quote bind_quoted: [opts: opts], generated: true do
-      @behaviour Homex.Entity
+      use Homex.Entity, update_interval: opts[:update_interval]
+
       @behaviour Homex.Entity.Switch
-      import Homex.Entity
 
       @name opts[:name]
       @platform "switch"
@@ -92,12 +97,7 @@ defmodule Homex.Entity.Switch do
       @command_topic "homex/#{@platform}/#{@unique_id}/set"
       @on_payload "ON"
       @off_payload "OFF"
-      @update_interval opts[:update_interval]
       @retain opts[:retain]
-
-      use GenServer
-
-      def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
       @impl Homex.Entity
       def name, do: @name
@@ -122,31 +122,25 @@ defmodule Homex.Entity.Switch do
         }
       end
 
-      @impl GenServer
-      def init(_init_arg \\ []) do
-        case @update_interval do
-          :never -> :ok
-          time -> :timer.send_interval(time, :update)
-        end
-
-        entity =
-          %Entity{}
-          |> Entity.register_handler(:state, fn val ->
-            Homex.publish(@state_topic, val, retain: @retain)
-          end)
-
-        {:ok, entity |> handle_init() |> Entity.execute_change(), {:continue, :register}}
+      @impl Homex.Entity
+      def setup_entity(entity) do
+        entity
+        |> Entity.register_handler(:state, fn val ->
+          Homex.publish(@state_topic, val, retain: @retain)
+        end)
       end
 
-      @impl GenServer
-      def handle_continue(:register, entity) do
-        Process.flag(:trap_exit, true)
+      @impl Homex.Entity
+      def handle_message({@command_topic, @on_payload}, entity) do
+        entity |> set_on() |> handle_on()
+      end
 
-        for topic <- subscriptions() do
-          Registry.register(Homex.SubscriptionRegistry, topic, nil)
-        end
+      def handle_message({@command_topic, @off_payload}, entity) do
+        entity |> set_off() |> handle_off()
+      end
 
-        {:noreply, entity}
+      def handle_message({@command_topic, _}, entity) do
+        entity
       end
 
       @impl Homex.Entity.Switch
@@ -159,57 +153,19 @@ defmodule Homex.Entity.Switch do
         Entity.put_change(entity, :state, @off_payload)
       end
 
-      @impl GenServer
-      def handle_info({@command_topic, @on_payload}, entity) do
-        {:noreply,
-         entity
-         |> set_on()
-         |> handle_on()
-         |> Entity.execute_change()}
-      end
-
-      def handle_info({@command_topic, @off_payload}, entity) do
-        {:noreply,
-         entity
-         |> set_off()
-         |> handle_off()
-         |> Entity.execute_change()}
-      end
-
-      def handle_info({@command_topic, _}, entity) do
-        {:noreply, entity}
-      end
-
-      def handle_info(:update, entity) do
-        {:noreply,
-         entity
-         |> handle_timer()
-         |> Entity.execute_change()}
-      end
-
-      @impl GenServer
-      def terminate(_reason, entity) do
-        for topic <- subscriptions() do
-          Registry.unregister(Homex.SubscriptionRegistry, topic)
-        end
-      end
-
-      @impl Homex.Entity.Switch
-      def handle_init(entity), do: entity
-
-      @impl Homex.Entity.Switch
-      def handle_timer(entity), do: entity
-
       @impl Homex.Entity.Switch
       def handle_on(entity), do: entity
 
       @impl Homex.Entity.Switch
       def handle_off(entity), do: entity
 
-      defoverridable handle_on: 1,
-                     handle_off: 1,
-                     handle_timer: 1,
-                     handle_init: 1
+      @impl Homex.Entity
+      def handle_init(entity), do: super(entity)
+
+      @impl Homex.Entity
+      def handle_timer(entity), do: super(entity)
+
+      defoverridable handle_init: 1, handle_on: 1, handle_off: 1, handle_timer: 1
     end
   end
 end

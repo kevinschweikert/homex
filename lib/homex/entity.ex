@@ -3,6 +3,40 @@ defmodule Homex.Entity do
   Defines the behaviour and struct for an entity implementation
   """
 
+  @doc "The given name of the entity"
+  @callback name() :: String.t()
+
+  @doc "The unique id of the entity"
+  @callback unique_id() :: String.t()
+
+  @doc "The list of topics to subscribe to"
+  @callback subscriptions() :: [String.t()]
+
+  @doc "The Home Assistant component config definition"
+  @callback config() :: map()
+
+  @doc "The Home Assistant platform"
+  @callback platform() :: String.t()
+
+  @doc false
+  @callback setup_entity(t()) :: t()
+
+  @doc """
+  Configures the intial state for the switch
+  """
+  @callback handle_init(entity :: t()) :: entity :: t()
+
+  @doc """
+  Handle a new message from the subscriptions
+  """
+  @callback handle_message({topic :: String.t(), payload :: term()}, entity :: t()) ::
+              entity :: t()
+
+  @doc """
+  If an `update_interval` is set, this callback will be fired
+  """
+  @callback handle_timer(entity :: Entity.t()) :: entity :: t()
+
   @type t() :: %__MODULE__{
           keys: MapSet.t(),
           values: map(),
@@ -12,6 +46,75 @@ defmodule Homex.Entity do
         }
 
   defstruct values: %{}, changes: %{}, handlers: %{}, keys: MapSet.new(), private: %{}
+
+  defmacro __using__(opts) do
+    quote bind_quoted: [opts: opts], generated: true do
+      import Homex.Entity
+      alias Homex.Entity
+      @behaviour Homex.Entity
+
+      @update_interval opts[:update_interval]
+
+      use GenServer
+
+      def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
+
+      @impl GenServer
+      def init(_init_arg \\ []) do
+        case @update_interval do
+          :never -> :ok
+          time -> :timer.send_interval(time, :update)
+        end
+
+        {:ok, Entity.new() |> setup_entity() |> handle_init() |> Entity.execute_change(),
+         {:continue, :register}}
+      end
+
+      @impl GenServer
+      def handle_continue(:register, entity) do
+        Process.flag(:trap_exit, true)
+
+        for topic <- subscriptions() do
+          Registry.register(Homex.SubscriptionRegistry, topic, nil)
+        end
+
+        {:noreply, entity}
+      end
+
+      @impl GenServer
+      def handle_info({topic, payload}, entity) do
+        {:noreply, handle_message({topic, payload}, entity) |> Entity.execute_change()}
+      end
+
+      def handle_info(:update, entity) do
+        {:noreply,
+         entity
+         |> handle_timer()
+         |> Entity.execute_change()}
+      end
+
+      @impl GenServer
+      def terminate(_reason, entity) do
+        for topic <- subscriptions() do
+          Registry.unregister(Homex.SubscriptionRegistry, topic)
+        end
+      end
+
+      @impl Homex.Entity
+      def setup_entity(entity), do: entity
+
+      @impl Homex.Entity
+      def handle_init(entity), do: entity
+
+      @impl Homex.Entity
+      def handle_message({_topic, _payload}, entity), do: entity
+
+      @impl Homex.Entity
+      def handle_timer(entity), do: entity
+
+      defoverridable setup_entity: 1, handle_init: 1, handle_timer: 1, handle_message: 2
+    end
+  end
 
   @doc false
   @spec new() :: t()
@@ -82,21 +185,6 @@ defmodule Homex.Entity do
   def get_private(%__MODULE__{private: private}, key) when is_atom(key) do
     Map.get(private, key)
   end
-
-  @doc "The given name of the entity"
-  @callback name() :: String.t()
-
-  @doc "The unique id of the entity"
-  @callback unique_id() :: String.t()
-
-  @doc "The list of topics to subscribe to"
-  @callback subscriptions() :: [String.t()]
-
-  @doc "The Home Assistant component config definition"
-  @callback config() :: map()
-
-  @doc "The Home Assistant platform"
-  @callback platform() :: String.t()
 
   @doc """
   Checks if the given module implements the behaviour from this module

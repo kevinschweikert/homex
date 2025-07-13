@@ -28,11 +28,28 @@ defmodule Homex.Entity.Light do
   @moduledoc """
   A light entity for Homex
 
+  Implements a `Homex.Entity`. See module for available callbacks.
+
   https://www.home-assistant.io/integrations/light.mqtt/
 
-  Options:
+  ## Options
 
   #{NimbleOptions.docs(@opts_schema)}
+
+  ## Overridable Functions
+
+  The following functions can be overridden in your entity:
+
+  * `handle_init/1` - From `Homex.Entity`
+  * `handle_timer/1` - From `Homex.Entity`
+  * `handle_on/1` - From `Homex.Entity.Light`
+  * `handle_off/1` - From `Homex.Entity.Light`
+  * `handle_brightness/1` - From `Homex.Entity.Light`
+
+  ### Default Implementations
+
+  All overridable functions have safe default implementations that return the entity unchanged.
+  You only need to override the functions you want to customize.
 
   ## Example
 
@@ -77,11 +94,6 @@ defmodule Homex.Entity.Light do
   @callback set_brightness(entity :: Entity.t(), brightness :: float()) :: entity :: Entity.t()
 
   @doc """
-  Configures the intial state for the light
-  """
-  @callback handle_init(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
-
-  @doc """
   Gets called when the command topic receieves an `on_payload`
   """
   @callback handle_on(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
@@ -96,11 +108,6 @@ defmodule Homex.Entity.Light do
   """
   @callback handle_brightness(entity :: Entity.t(), brightness :: float()) ::
               entity :: Entity.t() | {:error, reason :: term()}
-
-  @doc """
-  If an `update_interval` is set, this callback will be fired. By default the `update_interval` is set to `:never`
-  """
-  @callback handle_timer(entity :: Entity.t()) :: {:noreply, Entity.t()}
 
   @doc false
   @spec convert_brightness(String.t(), integer()) ::
@@ -127,9 +134,9 @@ defmodule Homex.Entity.Light do
     opts = NimbleOptions.validate!(opts, @opts_schema)
 
     quote bind_quoted: [opts: opts], generated: true do
-      @behaviour Homex.Entity
+      use Homex.Entity, update_interval: opts[:update_interval]
+
       @behaviour Homex.Entity.Light
-      import Homex.Entity
       import Homex.Entity.Light
 
       @name opts[:name]
@@ -151,11 +158,6 @@ defmodule Homex.Entity.Light do
       @on_payload "ON"
       @off_payload "OFF"
       @retain opts[:retain]
-      @update_interval opts[:update_interval]
-
-      use GenServer
-
-      def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
 
       @impl Homex.Entity
       def name, do: @name
@@ -186,15 +188,10 @@ defmodule Homex.Entity.Light do
         |> Map.reject(fn {_key, val} -> is_nil(val) end)
       end
 
-      @impl GenServer
-      def init(_init_arg \\ []) do
-        case @update_interval do
-          :never -> :ok
-          time -> :timer.send_interval(time, :update)
-        end
-
+      @impl Homex.Entity
+      def setup_entity(entity) do
         entity =
-          %Entity{}
+          entity
           |> Entity.register_handler(:state, fn val ->
             Homex.publish(@state_topic, val, retain: @retain)
           end)
@@ -208,19 +205,33 @@ defmodule Homex.Entity.Light do
             end),
             entity
           )
-
-        {:ok, entity |> handle_init() |> Entity.execute_change(), {:continue, :register}}
       end
 
-      @impl GenServer
-      def handle_continue(:register, entity) do
-        Process.flag(:trap_exit, true)
+      @impl Homex.Entity
+      def handle_message({@command_topic, @on_payload}, entity) do
+        entity
+        |> set_on()
+        |> handle_on()
+      end
 
-        for topic <- subscriptions() do
-          Registry.register(Homex.SubscriptionRegistry, topic, nil)
+      def handle_message({@command_topic, @off_payload}, entity) do
+        entity
+        |> set_off()
+        |> handle_off()
+      end
+
+      def handle_message({@command_topic, _}, entity) do
+        entity
+      end
+
+      def handle_message({@brightness_command_topic, brightness}, entity) do
+        with {:ok, value} <- convert_brightness(brightness) do
+          entity
+          |> set_brightness(value)
+          |> handle_brightness(value)
+        else
+          _ -> entity
         end
-
-        {:noreply, entity}
       end
 
       @impl Homex.Entity.Light
@@ -238,59 +249,6 @@ defmodule Homex.Entity.Light do
         Entity.put_change(entity, :brightness, Float.round(value / 100 * 255, 0))
       end
 
-      @impl GenServer
-      def handle_info({@command_topic, @on_payload}, entity) do
-        {:noreply,
-         entity
-         |> set_on()
-         |> handle_on()
-         |> Entity.execute_change()}
-      end
-
-      def handle_info({@command_topic, @off_payload}, entity) do
-        {:noreply,
-         entity
-         |> set_off()
-         |> handle_off()
-         |> Entity.execute_change()}
-      end
-
-      def handle_info({@command_topic, _}, entity) do
-        {:noreply, entity}
-      end
-
-      def handle_info({@brightness_command_topic, brightness}, entity) do
-        with {:ok, value} <- convert_brightness(brightness) do
-          {:noreply,
-           entity
-           |> set_brightness(value)
-           |> handle_brightness(value)
-           |> Entity.execute_change()}
-        else
-          _ -> {:noreply, entity}
-        end
-      end
-
-      def handle_info(:update, entity) do
-        {:noreply,
-         entity
-         |> handle_timer()
-         |> Entity.execute_change()}
-      end
-
-      @impl GenServer
-      def terminate(_reason, entity) do
-        for topic <- subscriptions() do
-          Registry.unregister(Homex.SubscriptionRegistry, topic)
-        end
-      end
-
-      @impl Homex.Entity.Light
-      def handle_init(entity), do: entity
-
-      @impl Homex.Entity.Light
-      def handle_timer(entity), do: entity
-
       @impl Homex.Entity.Light
       def handle_on(entity), do: entity
 
@@ -299,6 +257,12 @@ defmodule Homex.Entity.Light do
 
       @impl Homex.Entity.Light
       def handle_brightness(entity, _brightness), do: entity
+
+      @impl Homex.Entity
+      def handle_init(entity), do: super(entity)
+
+      @impl Homex.Entity
+      def handle_timer(entity), do: super(entity)
 
       defoverridable handle_on: 1,
                      handle_off: 1,
