@@ -14,17 +14,11 @@ defmodule Homex do
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
       {Homex.Manager, opts},
       {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
-      {Task, fn -> start_entities(entities) end}
+      {Task, fn -> Homex.add_entities(entities) end}
     ]
 
     opts = [strategy: :rest_for_one, name: __MODULE__]
     Supervisor.init(children, opts)
-  end
-
-  defp start_entities(entities) do
-    for entity <- entities do
-      Homex.add_entity(entity)
-    end
   end
 
   @config_schema [
@@ -174,6 +168,7 @@ defmodule Homex do
   defdelegate connected?(), to: Homex.Manager
   defdelegate publish(topic, payload, opts), to: Homex.Manager
   defdelegate add_entity(module), to: Homex.Manager
+  defdelegate add_entities(modules), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
 
   @doc """

@@ -68,6 +68,20 @@ defmodule Homex.Manager do
   end
 
   @doc """
+  Adds multiple modules to the entities and updates the discovery config, so that Home Assistant also adds the entities.
+  Returns a list of started modules.
+  """
+  @spec add_entities([atom()]) :: [atom()]
+  def add_entities(entities) when is_list(entities) do
+    if Enum.all?(entities, &Homex.Entity.implements_behaviour?/1) do
+      GenServer.call(__MODULE__, {:add_entities, entities})
+    else
+      Logger.error("Can't add entity.Behaviour Homex.Entity missing for one or more modules")
+      {:error, :entity_behaviour_missing}
+    end
+  end
+
+  @doc """
   Removes a registered module from the entities and updates the discovery config, so that Home Assistant also removes this entity.
   """
   @spec remove_entity(atom()) :: :ok | {:error, atom()}
@@ -169,6 +183,22 @@ defmodule Homex.Manager do
       {:error, error} ->
         {:reply, {:error, error}, state}
     end
+  end
+
+  def handle_call({:add_entities, modules}, _from, %__MODULE__{} = state) do
+    started =
+      for module <- modules do
+        with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
+          Logger.info("added entity #{module.name()}")
+          module
+        else
+          {:error, error} ->
+            Logger.info("Failed to start entity #{module.name()}, reason #{inspect(error)}")
+            []
+        end
+      end
+
+    {:reply, List.flatten(started), state, {:continue, :publish_discovery_config}}
   end
 
   def handle_call(
