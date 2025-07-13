@@ -55,7 +55,7 @@ defmodule Homex.Entity.Light do
 
   ```elixir
   defmodule MyLight do
-    use Homex.Entity.Light, name: "my-light"
+    use Homex.Entity.Light, name: "my-light", modes: [:brightness]
 
     def handle_brightness(entity, brightness) do
       IO.puts("Light set to \#{brightness}%")
