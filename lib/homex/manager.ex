@@ -12,13 +12,16 @@ defmodule Homex.Manager do
     :emqtt_pid,
     :emqtt_opts,
     :emqtt_ref,
+    :discovery_prefix,
+    :device,
+    :origin,
     connected: false,
     entities: [],
     entities_to_remove: []
   ]
 
-  def start_link(init_arg) do
-    GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
+  def start_link(%Homex.Config{} = config) do
+    GenServer.start_link(__MODULE__, config, name: __MODULE__)
   end
 
   @type qos() :: 0 | 1 | 2
@@ -95,11 +98,22 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
-  def init(_init_arg \\ []) do
-    emqtt_opts = Homex.emqtt_options()
+  def init(config) do
+    emqtt_opts = config.broker
+    discovery_prefix = config.discovery_prefix
+    device = config.device
+    origin = config.origin
+
     Logger.put_application_level(:emqtt, :info)
     Process.flag(:trap_exit, true)
-    {:ok, %__MODULE__{emqtt_opts: emqtt_opts}, {:continue, :connect}}
+
+    {:ok,
+     %__MODULE__{
+       emqtt_opts: emqtt_opts,
+       discovery_prefix: discovery_prefix,
+       device: device,
+       origin: origin
+     }, {:continue, :connect}}
   end
 
   @impl GenServer
@@ -137,6 +151,9 @@ defmodule Homex.Manager do
         :publish_discovery_config,
         %__MODULE__{
           emqtt_pid: emqtt_pid,
+          discovery_prefix: discovery_prefix,
+          device: device,
+          origin: origin,
           entities_to_remove: entities_to_remove
         } = state
       ) do
@@ -155,10 +172,14 @@ defmodule Homex.Manager do
         {module.unique_id(), %{platform: module.platform()}}
       end
 
-    discovery_config = Homex.discovery_config(components)
+    discovery_config = %{
+      device: device,
+      origin: origin,
+      components: components
+    }
 
     topic =
-      "#{Homex.discovery_prefix()}/device/#{Homex.escape(discovery_config.device.name)}/config"
+      "#{discovery_prefix}/device/#{Homex.escape(device.name)}/config"
 
     payload = Jason.encode!(discovery_config)
 

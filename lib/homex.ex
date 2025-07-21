@@ -7,14 +7,14 @@ defmodule Homex do
   end
 
   @impl Supervisor
-  def init(opts \\ []) do
-    entities = Homex.entities()
+  def init(_opts \\ []) do
+    config = config()
 
     children = [
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
-      {Homex.Manager, opts},
+      {Homex.Manager, config},
       {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
-      {Task, fn -> Homex.add_entities(entities) end}
+      {Task, fn -> Homex.add_entities(config.entities) end}
     ]
 
     opts = [strategy: :rest_for_one, name: __MODULE__]
@@ -25,17 +25,17 @@ defmodule Homex do
                    device: [
                      default: [],
                      required: false,
-                     type: :non_empty_keyword_list,
+                     type: :keyword_list,
                      doc:
                        "If no device configuration is given the identifiers and name will be set to the hostname of the device running Homex and will fall back to \"homex device\" when hostname is not available",
                      keys: [
-                       identifiers: [required: true, type: {:list, :string}],
-                       name: [required: false, type: :string],
-                       manufacturer: [required: false, type: :string],
-                       model: [required: false, type: :string],
-                       serial_number: [required: false, type: :string],
-                       sw_version: [required: false, type: :string],
-                       hw_version: [required: false, type: :string]
+                       identifiers: [required: false, type: {:or, [{:list, :string}, :mfa]}],
+                       name: [required: false, type: {:or, [:string, :mfa]}],
+                       manufacturer: [required: false, type: {:or, [:string, :mfa]}],
+                       model: [required: false, type: {:or, [:string, :mfa]}],
+                       serial_number: [required: false, type: {:or, [:string, :mfa]}],
+                       sw_version: [required: false, type: {:or, [:string, :mfa]}],
+                       hw_version: [required: false, type: {:or, [:string, :mfa]}]
                      ]
                    ],
                    origin: [
@@ -71,7 +71,6 @@ defmodule Homex do
                      doc:
                        "if changed in Homeassistant you also need to change it here to enable autodiscovery. The default works for a standard installation"
                    ],
-                   qos: [required: false, type: :integer, default: 0],
                    entities: [required: false, default: [], type: {:list, :atom}],
                    broker: [
                      required: false,
@@ -82,12 +81,10 @@ defmodule Homex do
                        port: [type: :integer, default: 1883, doc: "port of the MQTT broker"],
                        username: [
                          type: :string,
-                         default: "admin",
                          doc: "username for the MQTT broker"
                        ],
                        password: [
                          type: :string,
-                         default: "admin",
                          doc: "passwort for the MQTT broker"
                        ]
                      ]
@@ -171,109 +168,33 @@ defmodule Homex do
   defdelegate add_entities(modules), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
 
-  @doc """
-  Generates a unique ID from the platform name and entity name
+  @doc false
+  def config_schema(), do: @config_schema
 
-  ## Example
+  @doc false
+  def config, do: Application.get_all_env(:homex) |> Homex.Config.new()
 
-      iex> Homex.unique_id("my_entity", ["switch", MySwitch])
-      "my_entity_125806526"
-  """
+  @doc false
+  def hostname do
+    case :inet.gethostname() do
+      {:ok, hostname} -> to_string(hostname)
+      _ -> "homex"
+    end
+  end
+
+  @doc false
   @spec unique_id(String.t(), [term()]) :: String.t()
   def unique_id(name, identifiers) do
     escaped = escape(name)
     "#{escaped}_#{:erlang.phash2([escaped | identifiers])}"
   end
 
-  @doc """
-  Generates an escaped string
-
-  ## Example
-
-      iex> Homex.escape("my-entity!?")
-      "my_entity"
-
-      iex> Homex.escape("--my-entity--")
-      "my_entity"
-
-      iex> Homex.escape("my         entity")
-      "my_entity"
-
-      iex> Homex.escape("_my entity_")
-      "my_entity"
-  """
+  @doc false
   @spec escape(String.t()) :: String.t()
   def escape(name) when is_binary(name) do
     name
     |> String.downcase()
     |> String.replace(~r/[^a-z0-9]+/, "_")
     |> String.trim("_")
-  end
-
-  @doc """
-  Returns the statically defined entities from the config
-  """
-  @spec entities() :: [atom()]
-  def entities do
-    user_config_with_defaults()
-    |> NimbleOptions.validate!(@config_schema)
-    |> Keyword.get(:entities)
-  end
-
-  @doc """
-  Returns the Home Assistant discovery prefix
-  """
-  @spec discovery_prefix() :: String.t()
-  def discovery_prefix do
-    user_config_with_defaults()
-    |> NimbleOptions.validate!(@config_schema)
-    |> Keyword.get(:discovery_prefix)
-  end
-
-  @doc """
-  Returns the Home Assistant discovery config. This is a Map/JSON payload which contains all the necessary device and component data.data.
-  See https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery for more information
-  """
-  @spec discovery_config() :: map()
-  def discovery_config(components \\ %{}) do
-    config =
-      user_config_with_defaults()
-      |> NimbleOptions.validate!(@config_schema)
-
-    %{
-      device: Enum.into(config[:device], %{}),
-      origin: Enum.into(config[:origin], %{}),
-      components: components,
-      qos: config[:qos]
-    }
-  end
-
-  @doc """
-  Returns the broker config for EMQTT, the MQTT client used in this library
-  """
-  @spec emqtt_options() :: Keyword.t()
-  def emqtt_options do
-    config =
-      user_config_with_defaults()
-      |> NimbleOptions.validate!(@config_schema)
-
-    [
-      name: Homex.EMQTT,
-      host: String.to_charlist(config[:broker][:host]),
-      port: config[:broker][:port],
-      username: String.to_charlist(config[:broker][:username]),
-      password: String.to_charlist(config[:broker][:password])
-    ]
-  end
-
-  defp user_config_with_defaults do
-    hostname =
-      case :inet.gethostname() do
-        {:ok, hostname} -> to_string(hostname)
-        {:error, _} -> "homex device"
-      end
-
-    Application.get_all_env(:homex)
-    |> Keyword.merge(device: [identifiers: [hostname], name: hostname])
   end
 end
