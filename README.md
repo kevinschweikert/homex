@@ -39,7 +39,7 @@ defmodule MySwitch do
 end
 ```
 
-Configure broker and entities. See `Homex` module docs for options.
+Configure broker and entities. See `Homex.Config` module docs for options.
 Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_entity/1`.
 
 ```elixir
