@@ -76,3 +76,4 @@ PRs and Feedback are very welcome!
 ## Acknowledgements and Inspiration
 
 - [ex_homeassistant](https://github.com/Reimerei/ex_homeassistant) by @Reimerei
+- [hap](https://github.com/mtrudel/hap) by @mtrudel
