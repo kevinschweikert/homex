@@ -4,7 +4,7 @@ This library aims to bring Elixir (and especially Nerves) closer to Home Assista
 
 ## Example
 
-There is a Livebook example [`example.livemd`](https://livebook.dev/run?url=https://raw.githubusercontent.com/kevinschweikert/homex/refs/heads/main/example.livemd) to get you started!
+There is a Livebook example [`example.livemd`](https://livebook.dev/run?url=https://raw.githubusercontent.com/kevinschweikert/homex/refs/heads/main/example.livemd) to get you started! There is also an example repository using Nerves at https://github.com/kevinschweikert/Homex-Nerves-Example
 
 ## Installation
 
