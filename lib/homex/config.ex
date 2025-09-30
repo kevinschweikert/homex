@@ -1,6 +1,5 @@
 defmodule Homex.Config do
-
-    @config_schema [
+  @config_schema [
                    device: [
                      default: [],
                      required: false,
@@ -73,27 +72,24 @@ defmodule Homex.Config do
 
   @moduledoc "#{NimbleOptions.docs(@config_schema)}"
 
-
   @typep t() :: %__MODULE__{
-          device: map(),
-          origin: map(),
-          discovery_prefix: String.t(),
-          entities: [module()],
-          broker: [
-            name: atom(),
-            host: charlist(),
-            port: :inet.port_number(),
-            username: charlist(),
-            password: charlist()
-          ]
-        }
+           device: map(),
+           origin: map(),
+           discovery_prefix: String.t(),
+           entities: [module()],
+           broker: [
+             name: atom(),
+             host: charlist(),
+             port: :inet.port_number(),
+             username: charlist(),
+             password: charlist()
+           ]
+         }
 
   defstruct [:device, :origin, :discovery_prefix, :entities, :broker]
 
-
   @doc false
   def get, do: Application.get_all_env(:homex) |> new()
-
 
   @doc false
   @spec new(Keyword.t()) :: t()
