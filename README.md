@@ -21,6 +21,12 @@ end
 
 ## Usage
 
+Supported entity types:
+
+- Sensor
+- Switch
+- Light
+
 Define a module for the type of entity you want to use
 
 ```elixir
