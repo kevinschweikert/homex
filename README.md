@@ -1,5 +1,10 @@
 # Homex
 
+[![CI](https://github.com/kevinschweikert/homex/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinschweikert/req/actions/workflows/ci.yml)
+[![License](https://img.shields.io/hexpm/l/homex.svg)](https://github.com/kevinschweikert/req/blob/main/LICENSE.md)
+[![Version](https://img.shields.io/hexpm/v/homex.svg)](https://hex.pm/packages/homex)
+[![Hex Docs](https://img.shields.io/badge/documentation-gray.svg)](https://hexdocs.pm/homex)
+
 This library aims to bring Elixir (and especially Nerves) closer to Home Assistant. This is a work in progress based on the [initial idea](https://elixirforum.com/t/nerves-home-assistant-integration/70920).
 
 ## Example
