@@ -31,6 +31,7 @@ Supported entity types:
 - Sensor
 - Switch
 - Light
+- Camera
 
 Define a module for the type of entity you want to use
 

@@ -255,7 +255,7 @@ defmodule Homex.Manager do
       )
       when not is_nil(emqtt_pid) do
     with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
-      Logger.debug("published #{payload} to #{topic}")
+      Logger.debug("published #{inspect(payload)} to #{topic}")
     end
 
     {:noreply, state}
