@@ -78,8 +78,8 @@ defmodule Homex.MixProject do
   # TODO: remove when https://github.com/emqx/emqtt/issues/289 is fixed:
   defp emqtt_deps do
     [
-      {:gun, "~> 2.1.0"},
-      {:cowlib, "~> 2.13.0"}
+      {:gun, "~> 2.1.0", optional: true},
+      {:cowlib, "~> 2.13.0", optional: true}
     ]
   end
 end
