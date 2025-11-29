@@ -12,7 +12,9 @@ defmodule Homex.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: docs(),
-      package: package()
+      package: package(),
+      erlc_paths: ["vendor/emqtt/src"],
+      erlc_options: [{:i, "vendor/emqtt/include"}]
     ]
   end
 
@@ -64,12 +66,19 @@ defmodule Homex.MixProject do
   defp deps do
     [
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      # TODO: when https://github.com/emqx/emqtt/issues/289 is fixed:
+      # TODO: uncomment when https://github.com/emqx/emqtt/issues/289 is fixed:
       # {:emqtt, "1.14.4", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]},
-      {:emqtt, github: "emqx/emqtt", tag: "1.14.4", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]},
       {:ex_doc, "~> 0.38", only: :dev},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.1"}
+    ] ++ emqtt_deps()
+  end
+
+  # TODO: remove when https://github.com/emqx/emqtt/issues/289 is fixed:
+  defp emqtt_deps do
+    [
+      {:gun, "~> 2.1.0"},
+      {:cowlib, "~> 2.13.0"}
     ]
   end
 end
