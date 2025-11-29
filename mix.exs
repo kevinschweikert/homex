@@ -56,7 +56,8 @@ defmodule Homex.MixProject do
           Homex.Entity,
           Homex.Entity.Switch,
           Homex.Entity.Sensor,
-          Homex.Entity.Light
+          Homex.Entity.Light,
+          Homex.Entity.Camera
         ]
       ]
     ]
