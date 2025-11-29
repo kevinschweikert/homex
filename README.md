@@ -7,6 +7,10 @@
 
 This library aims to bring Elixir (and especially Nerves) closer to Home Assistant. This is a work in progress based on the [initial idea](https://elixirforum.com/t/nerves-home-assistant-integration/70920).
 
+> [!NOTE]
+> Currently we vendor a stripped down version of [`emqtt`](https://github.com/emqx/emqtt) but as soon as there is a new Hex release, we can remove that!
+> Improvements have been proposed upstream.
+
 ## Example
 
 There is a Livebook example [`example.livemd`](https://livebook.dev/run?url=https://raw.githubusercontent.com/kevinschweikert/homex/refs/heads/main/example.livemd) to get you started! There is also an example repository using Nerves at https://github.com/kevinschweikert/Homex-Nerves-Example

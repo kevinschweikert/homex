@@ -1,0 +1,12 @@
+{application, emqtt,
+ [{description, "Erlang MQTT v5.0 Client"},
+   {id, "emqtt"},
+   {vsn, "0.1.0"},
+   {modules, []},
+   {registered, []},
+   {applications, [kernel, stdlib, gun, cowlib]},
+   {env, []},
+   {licenses, ["Apache-2.0"]},
+   {maintainers, ["Kevin Schweikert <kevin@kevinschweikert.de>"]},
+   {links, [ {"Github", "https://github.com/kevinschweikert/emqtt"} ]}
+ ]}.
