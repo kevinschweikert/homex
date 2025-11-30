@@ -1,7 +1,7 @@
 # Homex
 
 [![CI](https://github.com/kevinschweikert/homex/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinschweikert/req/actions/workflows/ci.yml)
-[![License](https://img.shields.io/hexpm/l/homex.svg)](https://github.com/kevinschweikert/req/blob/main/LICENSE.md)
+[![License](https://img.shields.io/hexpm/l/homex.svg)](https://github.com/kevinschweikert/homex/blob/main/LICENSE)
 [![Version](https://img.shields.io/hexpm/v/homex.svg)](https://hex.pm/packages/homex)
 [![Hex Docs](https://img.shields.io/badge/documentation-gray.svg)](https://hexdocs.pm/homex)
 
