@@ -19,7 +19,9 @@ by adding `homex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:homex, "~> 0.1.0"}
+    {:homex, "~> 0.1.0"},
+    # If you want to use the MQTT library without QUIC support add
+    # {:quicer, "~> 0.2.15", compile: false, app: false, runtime: false, override: true},
   ]
 end
 ```

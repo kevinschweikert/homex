@@ -65,7 +65,7 @@ defmodule Homex.MixProject do
   defp deps do
     [
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:emqtt, "~> 1.14.7", system_env: [{"BUILD_WITHOUT_QUIC", "1"}]},
+      {:emqtt, "~> 1.14.7"},
       {:ex_doc, "~> 0.38", only: :docs},
       {:jason, "~> 1.4"},
       {:nimble_options, "~> 1.1"}
