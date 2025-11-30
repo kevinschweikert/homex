@@ -11,9 +11,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - elixir_version: '1.19'
+            otp_version: '28'
+            lint: true
           - elixir_version: '1.18'
             otp_version: '27.2'
-            lint: true
           - elixir_version: '1.17'
             otp_version: '27.0'
           - elixir_version: '1.16'
