@@ -60,7 +60,7 @@ Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Home
 import Config
 
 config :homex,
-  broker: [host: "localhost", port: 1883],
+  broker: [host: "localhost", port: 1883, username: "admin", password: "admin"],
   entities: [MySwitch]
 ```
 
