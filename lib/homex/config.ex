@@ -145,12 +145,13 @@ defmodule Homex.Config do
       name: Homex.EMQTT,
       host: String.to_charlist(config[:host]),
       port: config[:port],
-      username: optional(config[:username], &String.to_charlist/1),
-      password: optional(config[:password], &String.to_charlist/1)
+      username: optional(config[:username]),
+      password: optional(config[:password])
     ]
     |> Keyword.reject(fn {_key, val} -> is_nil(val) end)
   end
 
+  defp optional(val, transformer \\ &Function.identity/1)
   defp optional(val, _) when is_nil(val), do: nil
   defp optional(val, transformer), do: transformer.(val)
 end

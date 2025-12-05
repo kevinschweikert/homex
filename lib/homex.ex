@@ -9,10 +9,24 @@ defmodule Homex do
   @impl Supervisor
   def init(_opts \\ []) do
     config = Homex.Config.get()
+    broker_config = config.broker
+
+    host = Keyword.get(broker_config, :host)
+    port = Keyword.get(broker_config, :port)
+    username = Keyword.get(broker_config, :username, "admin")
+    password = Keyword.get(broker_config, :password, "admin")
 
     children = [
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
-      {Homex.Manager, config},
+      {Tortoise311.Connection,
+       [
+         client_id: Homex.Client,
+         server: {Tortoise311.Transport.Tcp, host: host, port: port},
+         handler: {Homex.Manager, config},
+         user_name: username,
+         password: password
+       ]},
+      # {Homex.Manager, config},
       {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
       {Task, fn -> Homex.add_entities(config.entities) end}
     ]
