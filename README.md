@@ -34,6 +34,7 @@ Supported entity types:
 - Switch
 - Light
 - Camera
+- Button
 
 Define a module for the type of entity you want to use
 
