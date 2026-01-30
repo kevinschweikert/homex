@@ -199,7 +199,8 @@ defmodule Homex.Manager do
     with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
       Logger.info("added entity #{module.name()}")
 
-      {:reply, :ok, state, {:continue, :publish_discovery_config}}
+      {:reply, :ok, %{state | entities: [module | state.entities]},
+       {:continue, :publish_discovery_config}}
     else
       {:error, error} ->
         {:reply, {:error, error}, state}
@@ -219,7 +220,8 @@ defmodule Homex.Manager do
         end
       end
 
-    {:reply, List.flatten(started), state, {:continue, :publish_discovery_config}}
+    {:reply, List.flatten(started), %{state | entities: state.entities ++ started},
+     {:continue, :publish_discovery_config}}
   end
 
   def handle_call(
