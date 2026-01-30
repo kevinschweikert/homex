@@ -153,20 +153,15 @@ defmodule Homex.Entity do
   def execute_change(
         %__MODULE__{keys: keys, values: values, changes: changes, handlers: handlers} = entity
       ) do
-    values =
-      for key <- keys, into: %{} do
-        value = Map.get(values, key)
-        change = Map.get(changes, key)
-        handler = Map.get(handlers, key)
-
-        if value != change and not is_nil(change) do
+    changes = Map.take(changes, MapSet.to_list(keys))
+    Enum.each(changes, fn {key, change} ->
+        if Map.get(values, key) != change do
+          handler = Map.get(handlers, key)
           handler.(change)
         end
+    end)
 
-        {key, change}
-      end
-
-    %{entity | changes: %{}, values: values}
+    %{entity | changes: %{}, values: Map.merge(values, changes)}
   end
 
   @doc """
