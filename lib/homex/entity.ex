@@ -153,7 +153,7 @@ defmodule Homex.Entity do
   def execute_change(
         %__MODULE__{keys: keys, values: values, changes: changes, handlers: handlers} = entity
       ) do
-    values =
+    new_values =
       for key <- keys, into: %{} do
         value = Map.get(values, key)
         change = Map.get(changes, key)
@@ -165,8 +165,9 @@ defmodule Homex.Entity do
 
         {key, change}
       end
+      |> Map.reject(fn {_, value} -> is_nil(value) end)
 
-    %{entity | changes: %{}, values: values}
+    %{entity | changes: %{}, values: Map.merge(values, new_values)}
   end
 
   @doc """

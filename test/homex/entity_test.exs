@@ -40,4 +40,18 @@ defmodule Homex.EntityTest do
       refute_receive 10
     end
   end
+
+  describe "execute_change/1" do
+    test "existing values should stay" do
+      entity =
+        %Entity{}
+        |> Entity.register_handler(:test, &Function.identity/1, :bar)
+        |> Entity.register_handler(:test_two, &Function.identity/1, :foo)
+        |> Entity.put_change(:test, 10)
+        |> Entity.execute_change()
+
+      assert entity.values.test == 10
+      assert entity.values.test_two == :foo
+    end
+  end
 end
