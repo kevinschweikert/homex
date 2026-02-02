@@ -20,6 +20,27 @@ defmodule Homex.Entity.Climate do
                    default: ["auto", "off", "cool", "heat", "dry", "fan_only"],
                    doc: "A list of supported modes. Needs to be a subset of the default values."
                  ],
+                 max_temp: [
+                   required: false,
+                   type: {:or, [:float, nil]},
+                   default: nil,
+                   doc:
+                     "Maximum set point available. The default value depends on the temperature unit, and will be 35°C or 95°F"
+                 ],
+                 min_temp: [
+                   required: false,
+                   type: {:or, [:float, nil]},
+                   default: nil,
+                   doc:
+                     "Minimum set point available. The default value depends on the temperature unit, and will be 7°C or 44.6°F."
+                 ],
+                 precision: [
+                   required: false,
+                   type: {:or, [:float, nil]},
+                   default: nil,
+                   doc:
+                     "The desired precision for this device. Can be used to match your actual thermostat’s precision. Supported values are 0.1, 0.5 and 1.0."
+                 ],
                  include_temperature_low_high: [
                    required: false,
                    type: :boolean,
@@ -132,9 +153,24 @@ defmodule Homex.Entity.Climate do
       @temperature_state_topic "homex/#{@platform}/#{@unique_id}/target"
       @temperature_low_state_topic "homex/#{@platform}/#{@unique_id}/target_low"
       @temperature_high_state_topic "homex/#{@platform}/#{@unique_id}/target_high"
+      @precision opts[:precision]
+      @min_temp opts[:min_temp]
+      @max_temp opts[:max_temp]
       @modes opts[:modes]
       @retain opts[:retain]
       @include_temperature_low_high opts[:include_temperature_low_high]
+
+      @doc """
+      Publishes the mode via the mode_state_topic.
+      """
+      def set_mode(val) when is_binary(val) and val in @modes,
+        do: GenServer.cast(__MODULE__, {:mode, val})
+
+      @doc """
+      Publishes the current humidity via the current_humidity_topic.
+      """
+      def set_current_humidity(val) when is_float(val),
+        do: GenServer.cast(__MODULE__, {:current_humidity, val})
 
       @doc """
       Publishes the current temperature via the current_temperature_topic.
@@ -174,7 +210,7 @@ defmodule Homex.Entity.Climate do
 
       @impl Homex.Entity
       def config do
-        config = %{
+        %{
           platform: @platform,
           name: @name,
           current_humidity_topic: @current_humidity_topic,
@@ -183,17 +219,25 @@ defmodule Homex.Entity.Climate do
           mode_state_topic: @mode_state_topic,
           temperature_command_topic: @temperature_command_topic,
           temperature_state_topic: @temperature_state_topic,
+          precision: @precision,
+          min_temp: @min_temp,
+          max_temp: @max_temp,
           modes: @modes,
           unique_id: @unique_id
         }
-
-        if @include_temperature_low_high do
-          config
-          |> Map.put(:temperature_low_state_topic, @temperature_low_state_topic)
-          |> Map.put(:temperature_high_state_topic, @temperature_high_state_topic)
-        else
-          config
-        end
+        |> append_if_set(
+          @include_temperature_low_high,
+          :temperature_low_state_topic,
+          @temperature_low_state_topic
+        )
+        |> append_if_set(
+          @include_temperature_low_high,
+          :temperature_high_state_topic,
+          @temperature_high_state_topic
+        )
+        |> append_if_set(:precision, @precision)
+        |> append_if_set(:min_temp, @min_temp)
+        |> append_if_set(:max_temp, @max_temp)
       end
 
       @impl Homex.Entity
@@ -262,8 +306,18 @@ defmodule Homex.Entity.Climate do
       def handle_timer(entity), do: super(entity)
 
       @impl GenServer
+      def handle_cast({:mode, val}, entity) do
+        entity = entity |> Entity.put_change(:mode, val) |> Entity.execute_change()
+        {:noreply, entity}
+      end
+
       def handle_cast({:current_temperature, val}, entity) do
         entity = entity |> Entity.put_change(:current_temperature, val) |> Entity.execute_change()
+        {:noreply, entity}
+      end
+
+      def handle_cast({:current_humidity, val}, entity) do
+        entity = entity |> Entity.put_change(:current_humidity, val) |> Entity.execute_change()
         {:noreply, entity}
       end
 
@@ -285,6 +339,11 @@ defmodule Homex.Entity.Climate do
 
         {:noreply, entity}
       end
+
+      defp append_if_set(config, _key, nil), do: config
+      defp append_if_set(config, key, value), do: Map.put(config, key, value)
+      defp append_if_set(config, false, _key, _value), do: config
+      defp append_if_set(config, true, key, value), do: Map.put(config, key, value)
 
       defoverridable handle_init: 1, handle_mode: 1, handle_target_temperature: 1, handle_timer: 1
     end
