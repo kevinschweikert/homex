@@ -109,13 +109,16 @@ defmodule Homex.Config do
     }
   end
 
+  @device_defaults [
+    name: {Homex, :hostname, []},
+    identifiers: [{Homex, :hostname, []}]
+  ]
+
   defp make_device_config(opts) do
     device = Keyword.get(opts, :device, [])
 
-    device =
-      Keyword.merge([name: {Homex, :hostname, []}, identifiers: [{Homex, :hostname, []}]], device)
-
-    device
+    @device_defaults
+    |> Keyword.merge(device)
     |> map_opts()
     |> Enum.into(%{})
   end
