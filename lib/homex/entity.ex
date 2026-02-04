@@ -156,10 +156,10 @@ defmodule Homex.Entity do
     values =
       for key <- keys, into: %{} do
         value = Map.get(values, key)
-        change = Map.get(changes, key)
+        change = Map.get(changes, key, value)
         handler = Map.get(handlers, key)
 
-        if value != change and not is_nil(change) do
+        if value != change do
           handler.(change)
         end
 
