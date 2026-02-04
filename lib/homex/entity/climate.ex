@@ -68,8 +68,8 @@ defmodule Homex.Entity.Climate do
 
   * `handle_init/1` - From `Homex.Entity`
   * `handle_timer/1` - From `Homex.Entity`
-  * `handle_mode/1` - From `Homex.Entity.Climate`
-  * `handle_target_temperature/1` - From `Homex.Entity.Climate`
+  * `handle_mode/2` - From `Homex.Entity.Climate`
+  * `handle_target_temperature/2` - From `Homex.Entity.Climate`
 
   ### Default Implementations
 
@@ -83,13 +83,13 @@ defmodule Homex.Entity.Climate do
     use Homex.Entity.Climate, name: "my-hvac"
 
     @impl Homex.Entity.Climate
-    def handle_mode(entity) do
-      dbg(entity)
+    def handle_mode(entity, mode) do
+      dbg(mode)
     end
 
     @impl Homex.Entity.Climate
-    def handle_target_temperature(entity) do
-      dbg(entity)
+    def handle_target_temperature(entity, target) do
+      dbg(target)
     end
 
     @impl Homex.Entity
@@ -127,12 +127,12 @@ defmodule Homex.Entity.Climate do
   @doc """
   Gets called when the mode command topic is receieved
   """
-  @callback handle_mode(entity :: Entity.t()) :: entity :: Entity.t()
+  @callback handle_mode(entity :: Entity.t(), mode :: String.t()) :: entity :: Entity.t()
 
   @doc """
   Gets called when the temperature command topic is receieved
   """
-  @callback handle_target_temperature(entity :: Entity.t()) :: entity :: Entity.t()
+  @callback handle_target_temperature(entity :: Entity.t(), target :: float()) :: entity :: Entity.t()
 
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @opts_schema)
@@ -265,12 +265,12 @@ defmodule Homex.Entity.Climate do
 
       @impl Homex.Entity
       def handle_message({@mode_command_topic, new_mode}, entity) when new_mode in @modes do
-        entity |> set_mode(new_mode) |> handle_mode()
+        entity |> set_mode(new_mode) |> handle_mode(new_mode)
       end
 
       def handle_message({@temperature_command_topic, new_target}, entity) do
         new_target = new_target |> Float.parse() |> elem(0)
-        entity |> set_target_temperature(new_target) |> handle_target_temperature()
+        entity |> set_target_temperature(new_target) |> handle_target_temperature(new_target)
       end
 
       @impl Homex.Entity.Climate
@@ -294,10 +294,10 @@ defmodule Homex.Entity.Climate do
       end
 
       @impl Homex.Entity.Climate
-      def handle_mode(entity), do: entity
+      def handle_mode(entity, mode), do: entity
 
       @impl Homex.Entity.Climate
-      def handle_target_temperature(entity), do: entity
+      def handle_target_temperature(entity, target), do: entity
 
       @impl Homex.Entity
       def handle_init(entity), do: super(entity)
@@ -345,7 +345,7 @@ defmodule Homex.Entity.Climate do
       defp append_if_set(config, false, _key, _value), do: config
       defp append_if_set(config, true, key, value), do: Map.put(config, key, value)
 
-      defoverridable handle_init: 1, handle_mode: 1, handle_target_temperature: 1, handle_timer: 1
+      defoverridable handle_init: 1, handle_mode: 2, handle_target_temperature: 2, handle_timer: 1
     end
   end
 end
