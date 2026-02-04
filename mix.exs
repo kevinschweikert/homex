@@ -56,7 +56,8 @@ defmodule Homex.MixProject do
           Homex.Entity.Sensor,
           Homex.Entity.Light,
           Homex.Entity.Camera,
-          Homex.Entity.Button
+          Homex.Entity.Button,
+          Homex.Entity.DeviceTrigger
         ]
       ]
     ]

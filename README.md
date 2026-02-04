@@ -21,8 +21,7 @@ def deps do
   [
     {:homex, "~> 0.1.0"},
     # If you want to use the MQTT library without QUIC support add
-    # {:quicer, "~> 0.2.15", compile: false, app: false, runtime: false, override: true},
-  ]
+    # {:emqtt, github: "emqx/emqtt.git", tag: "1.14.7", override: true, system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}  ]
 end
 ```
 
@@ -35,6 +34,7 @@ Supported entity types:
 - Light
 - Camera
 - Button
+- DeviceTrigger
 
 Define a module for the type of entity you want to use
 
