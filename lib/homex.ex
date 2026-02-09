@@ -92,6 +92,8 @@ defmodule Homex do
 
   defdelegate connected?(), to: Homex.Manager
   defdelegate publish(topic, payload, opts), to: Homex.Manager
+  defdelegate entities(), to: Homex.Manager
+  defdelegate entity(name_or_module), to: Homex.Manager
   defdelegate add_entity(module), to: Homex.Manager
   defdelegate add_entities(modules), to: Homex.Manager
   defdelegate remove_entity(module), to: Homex.Manager
