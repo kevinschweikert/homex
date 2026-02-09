@@ -16,7 +16,6 @@ defmodule Homex.Manager do
     :device,
     :origin,
     connected: false,
-    entities: [],
     entities_to_remove: []
   ]
 
@@ -31,9 +30,7 @@ defmodule Homex.Manager do
   @type pubopt() :: {:retain, boolean()} | {:qos, qos() | qos_name()}
 
   @spec connected?() :: boolean()
-  def connected? do
-    GenServer.call(__MODULE__, :is_connected)
-  end
+  def connected?, do: GenServer.call(__MODULE__, :is_connected)
 
   @doc """
   Let's you publish additional messages to a topic
@@ -42,10 +39,7 @@ defmodule Homex.Manager do
           :ok | {:error, Jason.EncodeError.t() | Exception.t()}
 
   def publish(topic, payload, opts \\ [])
-
-  def publish(topic, payload, opts) when is_binary(payload) do
-    do_publish(topic, payload, opts)
-  end
+  def publish(topic, payload, opts) when is_binary(payload), do: do_publish(topic, payload, opts)
 
   def publish(topic, payload, opts) do
     with {:ok, payload} <- Jason.encode(payload) do
@@ -53,9 +47,20 @@ defmodule Homex.Manager do
     end
   end
 
-  defp do_publish(topic, payload, opts) do
-    GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
-  end
+  defp do_publish(topic, payload, opts),
+    do: GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
+
+  def entities, do: GenServer.call(__MODULE__, :entities)
+
+  @doc """
+  Finds an Entity by its name or implementing module.
+  """
+  @spec entity(module()) :: Entity.t() | nil
+  @spec entity(String.t()) :: Entity.t() | nil
+  def entity(module) when is_atom(module), do: find_entity(&(&1.impl == module))
+  def entity(name) when is_binary(name), do: find_entity(&(&1.impl.name() == name))
+
+  def find_entity(func) when is_function(func, 1), do: Enum.find(entities(), &func.(&1))
 
   @doc """
   Adds a module to the entities and updates the discovery config, so that Home Assistant also adds this entity.
@@ -72,7 +77,7 @@ defmodule Homex.Manager do
 
   @doc """
   Adds multiple modules to the entities and updates the discovery config, so that Home Assistant also adds the entities.
-  Returns a list of started modules.
+  Returns a list of started entities.
   """
   @spec add_entities([atom()]) :: [atom()]
   def add_entities(entities) when is_list(entities) do
@@ -157,19 +162,16 @@ defmodule Homex.Manager do
           entities_to_remove: entities_to_remove
         } = state
       ) do
-    entities =
-      DynamicSupervisor.which_children(Homex.EntitySupervisor)
-      |> Enum.map(fn {_id, _pid, _type, modules} -> modules end)
-      |> List.flatten()
+    {:reply, entities, _} = handle_call(:entities, nil, state)
 
     components =
-      for module <- entities, into: %{} do
-        {module.unique_id(), module.config()}
+      for entity <- entities, into: %{} do
+        {entity.impl.unique_id(), entity.impl.config()}
       end
 
     components =
-      for module <- entities_to_remove, into: components do
-        {module.unique_id(), %{platform: module.platform()}}
+      for impl <- entities_to_remove, into: components do
+        {impl.unique_id(), %{platform: impl.platform()}}
       end
 
     discovery_config = %{
@@ -178,8 +180,7 @@ defmodule Homex.Manager do
       components: components
     }
 
-    topic =
-      "#{discovery_prefix}/device/#{Homex.escape(device.name)}/config"
+    topic = "#{discovery_prefix}/device/#{Homex.escape(device.name)}/config"
 
     payload = Jason.encode!(discovery_config)
 
@@ -191,12 +192,22 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
+  def handle_call(:entities, _from, state) do
+    entities =
+      DynamicSupervisor.which_children(Homex.EntitySupervisor)
+      |> Enum.map(fn {_id, pid, _type, _module} -> GenServer.call(pid, :state) end)
+      |> List.flatten()
+
+    {:reply, entities, state}
+  end
+
   def handle_call(:is_connected, _from, %__MODULE__{connected: connected} = state) do
     {:reply, connected, state}
   end
 
   def handle_call({:add_entity, module}, _from, %__MODULE__{} = state) do
-    with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
+    with {:ok, _pid} <-
+           DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, impl: module}) do
       Logger.info("added entity #{module.name()}")
 
       {:reply, :ok, state, {:continue, :publish_discovery_config}}
@@ -209,7 +220,8 @@ defmodule Homex.Manager do
   def handle_call({:add_entities, modules}, _from, %__MODULE__{} = state) do
     started =
       for module <- modules do
-        with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
+        with {:ok, _pid} <-
+               DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, impl: module}) do
           Logger.info("added entity #{module.name()}")
           module
         else

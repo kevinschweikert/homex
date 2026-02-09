@@ -101,6 +101,8 @@ defmodule Homex.Entity.Sensor do
       @state_class opts[:state_class]
       @retain opts[:retain]
 
+      def send_value(val), do: GenServer.cast(__MODULE__, {:push_value, :state, val})
+
       @impl Homex.Entity
       def name, do: @name
 
