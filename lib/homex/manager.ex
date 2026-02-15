@@ -50,7 +50,11 @@ defmodule Homex.Manager do
   defp do_publish(topic, payload, opts),
     do: GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
 
-  def entities, do: GenServer.call(__MODULE__, :entities)
+  def entities do
+    DynamicSupervisor.which_children(Homex.EntitySupervisor)
+    |> Enum.map(fn {_id, pid, _type, _module} -> GenServer.call(pid, :state) end)
+    |> List.flatten()
+  end
 
   @doc """
   Finds an Entity by its name or implementing module.
@@ -162,7 +166,7 @@ defmodule Homex.Manager do
           entities_to_remove: entities_to_remove
         } = state
       ) do
-    {:reply, entities, _} = handle_call(:entities, nil, state)
+    {:reply, entities, _} = entities()
 
     components =
       for entity <- entities, into: %{} do
@@ -192,15 +196,6 @@ defmodule Homex.Manager do
   end
 
   @impl GenServer
-  def handle_call(:entities, _from, state) do
-    entities =
-      DynamicSupervisor.which_children(Homex.EntitySupervisor)
-      |> Enum.map(fn {_id, pid, _type, _module} -> GenServer.call(pid, :state) end)
-      |> List.flatten()
-
-    {:reply, entities, state}
-  end
-
   def handle_call(:is_connected, _from, %__MODULE__{connected: connected} = state) do
     {:reply, connected, state}
   end
