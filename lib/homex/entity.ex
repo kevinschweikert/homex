@@ -44,7 +44,7 @@ defmodule Homex.Entity do
           handlers: map(),
           changes: map(),
           private: map(),
-          impl: Module.t() | nil
+          impl: Module.t()
         }
 
   defstruct values: %{}, changes: %{}, handlers: %{}, keys: MapSet.new(), private: %{}, impl: nil
@@ -158,7 +158,7 @@ defmodule Homex.Entity do
 
   @impl GenServer
   def init(opts) do
-    entity = new(impl: Keyword.get(opts, :impl))
+    entity = new(impl: Keyword.fetch!(opts, :impl))
 
     case entity.impl.update_interval() do
       :never -> :ok
