@@ -71,8 +71,6 @@ defmodule Homex.Entity.DeviceTrigger do
       @device_type opts[:type]
       @subtype opts[:subtype]
 
-      def trigger, do: GenServer.cast(__MODULE__, {:push_value, :trigger, @payload})
-
       @impl Homex.Entity
       def name, do: @name
 
