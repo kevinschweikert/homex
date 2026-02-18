@@ -69,13 +69,14 @@ defmodule Homex.Manager do
   @doc """
   Adds a module to the entities and updates the discovery config, so that Home Assistant also adds this entity.
   """
-  @spec add_entity(atom()) :: :ok | {:error, atom()}
-  def add_entity(module) when is_atom(module) do
-    if Homex.Entity.implements_behaviour?(module) do
-      GenServer.call(__MODULE__, {:add_entity, module})
+  @spec add_entity(Keyword.t()) :: :ok | {:error, atom()}
+  def add_entity(opts) do
+    with %Homex.Entity{} = entity <- Homex.Entity.new(opts) do
+      GenServer.call(__MODULE__, {:add_entity, entity})
     else
-      Logger.error("Can't add entity.Behaviour Homex.Entity missing for #{module}")
-      {:error, :entity_behaviour_missing}
+      nil ->
+        Logger.error("Can't add entity, invalid configuration #{inspect(opts)}")
+        {:error, :entity_invalid}
     end
   end
 
@@ -84,9 +85,9 @@ defmodule Homex.Manager do
   Returns a list of started entities.
   """
   @spec add_entities([atom()]) :: [atom()]
-  def add_entities(entities) when is_list(entities) do
-    if Enum.all?(entities, &Homex.Entity.implements_behaviour?/1) do
-      GenServer.call(__MODULE__, {:add_entities, entities})
+  def add_entities(opts) when is_list(opts) do
+    if Enum.all?(opts, &Homex.Entity.valid?/1) do
+      GenServer.call(__MODULE__, {:add_entities, Enum.map(opts, &Homex.Entity.new/1)})
     else
       Logger.error("Can't add entity.Behaviour Homex.Entity missing for one or more modules")
       {:error, :entity_behaviour_missing}
@@ -97,13 +98,8 @@ defmodule Homex.Manager do
   Removes a registered module from the entities and updates the discovery config, so that Home Assistant also removes this entity.
   """
   @spec remove_entity(atom()) :: :ok | {:error, atom()}
-  def remove_entity(module) when is_atom(module) do
-    if Homex.Entity.implements_behaviour?(module) do
-      GenServer.call(__MODULE__, {:remove_entity, module})
-    else
-      Logger.error("Can't remove entity.Behaviour Homex.Entity missing for #{module}")
-      {:error, :entity_behaviour_missing}
-    end
+  def remove_entity(name) when is_atom(name) do
+    GenServer.call(__MODULE__, {:remove_entity, name})
   end
 
   @impl GenServer
@@ -166,7 +162,7 @@ defmodule Homex.Manager do
           entities_to_remove: entities_to_remove
         } = state
       ) do
-    {:reply, entities, _} = entities()
+    entities = entities()
 
     components =
       for entity <- entities, into: %{} do
@@ -174,8 +170,10 @@ defmodule Homex.Manager do
       end
 
     components =
-      for impl <- entities_to_remove, into: components do
-        {impl.unique_id(), %{platform: impl.platform()}}
+      for name <- entities_to_remove, into: components do
+        # TODO is there a way to do this without a genserver call?
+        entity = GenServer.call(name, :state)
+        {entity.impl.unique_id(), %{platform: entity.impl.platform()}}
       end
 
     discovery_config = %{
@@ -200,10 +198,10 @@ defmodule Homex.Manager do
     {:reply, connected, state}
   end
 
-  def handle_call({:add_entity, module}, _from, %__MODULE__{} = state) do
+  def handle_call({:add_entity, entity}, _from, %__MODULE__{} = state) do
     with {:ok, _pid} <-
-           DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, impl: module}) do
-      Logger.info("added entity #{module.name()}")
+           DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, entity}) do
+      Logger.info("added entity #{entity.name} of #{entity.impl.name()}")
 
       {:reply, :ok, state, {:continue, :publish_discovery_config}}
     else
@@ -212,16 +210,19 @@ defmodule Homex.Manager do
     end
   end
 
-  def handle_call({:add_entities, modules}, _from, %__MODULE__{} = state) do
+  def handle_call({:add_entities, entities}, _from, %__MODULE__{} = state) do
     started =
-      for module <- modules do
+      for entity <- entities do
         with {:ok, _pid} <-
-               DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, impl: module}) do
-          Logger.info("added entity #{module.name()}")
-          module
+               DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, entity}) do
+          Logger.info("added entity #{entity.name} of #{entity.impl.name()}")
+          entity
         else
           {:error, error} ->
-            Logger.info("Failed to start entity #{module.name()}, reason #{inspect(error)}")
+            Logger.info(
+              "Failed to start entity #{entity.name} of #{entity.impl.name()}, reason #{inspect(error)}"
+            )
+
             []
         end
       end
@@ -230,21 +231,21 @@ defmodule Homex.Manager do
   end
 
   def handle_call(
-        {:remove_entity, module},
+        {:remove_entity, name},
         _from,
         %__MODULE__{entities_to_remove: entities_to_remove} = state
       ) do
     child =
       DynamicSupervisor.which_children(Homex.EntitySupervisor)
-      |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, modules} ->
-        module in modules
+      |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, names} ->
+        name in names
       end)
 
     with {_id, pid, _type, _modules} <- child,
          :ok <- DynamicSupervisor.terminate_child(Homex.EntitySupervisor, pid) do
-      Logger.info("removed entity #{module.name()}")
+      Logger.info("removed entity #{name}")
 
-      {:reply, :ok, %{state | entities_to_remove: [module | entities_to_remove]},
+      {:reply, :ok, %{state | entities_to_remove: [name | entities_to_remove]},
        {:continue, :publish_discovery_config}}
     else
       {:error, error} -> {:reply, {:error, error}, state}
