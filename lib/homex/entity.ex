@@ -39,6 +39,7 @@ defmodule Homex.Entity do
   @callback handle_timer(entity :: Entity.t()) :: entity :: t()
 
   @type t() :: %__MODULE__{
+          name: atom(),
           keys: MapSet.t(),
           values: map(),
           handlers: map(),
@@ -47,7 +48,13 @@ defmodule Homex.Entity do
           impl: Module.t()
         }
 
-  defstruct values: %{}, changes: %{}, handlers: %{}, keys: MapSet.new(), private: %{}, impl: nil
+  defstruct name: nil,
+            values: %{},
+            changes: %{},
+            handlers: %{},
+            keys: MapSet.new(),
+            private: %{},
+            impl: nil
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
@@ -75,11 +82,26 @@ defmodule Homex.Entity do
     end
   end
 
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :impl))
+  def start_link(entity), do: GenServer.start_link(__MODULE__, entity, name: entity.name)
 
   @doc false
   @spec new(Keyword.t()) :: t()
-  def new(opts), do: struct(__MODULE__, opts)
+  def new(opts) do
+    if valid?(opts) do
+      struct(__MODULE__, opts)
+    else
+      nil
+    end
+  end
+
+  def valid?(%__MODULE__{}), do: true
+
+  def valid?(opts) when is_list(opts) do
+    Keyword.has_key?(opts, :name) and Keyword.has_key?(opts, :impl) and
+      implements_behaviour?(Keyword.get(opts, :impl))
+  end
+
+  def valid(_), do: false
 
   @doc false
   @spec register_handler(t(), atom(), fun(), term()) :: t()
@@ -157,9 +179,7 @@ defmodule Homex.Entity do
   end
 
   @impl GenServer
-  def init(opts) do
-    entity = new(impl: Keyword.fetch!(opts, :impl))
-
+  def init(%__MODULE__{} = entity) do
     case entity.impl.update_interval() do
       :never -> :ok
       time -> :timer.send_interval(time, :update)
