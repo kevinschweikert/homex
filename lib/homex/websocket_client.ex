@@ -1,0 +1,238 @@
+defmodule Homex.WebsocketClient do
+  @moduledoc """
+  WebSocket client for the [Home Assistant WebSocket API](https://developers.home-assistant.io/docs/api/websocket).
+
+  Establishes and maintains a persistent WebSocket connection to a Home Assistant
+  instance. On connection, it authenticates using a long-lived access token and
+  subscribes to `state_changed` events. Incoming state change events are broadcast
+  over Phoenix PubSub via `Homex.PubSub` on the `"state_changed"` topic.
+
+  Phoenix PubSub is required for this module to function properly. A PubSub instance
+  named `Homex.PubSub` must also be started for it to work.
+
+  This module is intended to be started under a supervision tree, typically as part
+  of the application's main supervisor.
+
+  ## Example
+
+      def start(_type, _args) do
+        children =
+          [
+            ...,
+            Supervisor.child_spec({Phoenix.PubSub, name: Homex.PubSub}, id: :homex_pub_sub),
+            {Homex.WebsocketClient,
+            token: Application.get_env(:my_app, :home_assistant_access_token),
+            host: Application.get_env(:my_app, :home_assistant_host),
+            port: Application.get_env(:my_app, :home_assistant_port, 8123)}
+          ]
+
+        opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+        Supervisor.start_link(children, opts)
+      end
+
+  ## Example GenServers that subscribe to Websocket's PubSub events
+
+      defmodule MyApp.HomexHandler do
+        use GenServer
+        require Logger
+
+        def start_link(__opts) do
+          GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+        end
+
+        @impl true
+        def init(state) do
+          Phoenix.PubSub.subscribe(Homex.PubSub, "state_changed")
+          {:ok, state}
+        end
+
+        @entity_id "some.entity"
+        @impl GenServer
+        # Handle a specific entity by its id
+        def handle_info(
+              {:state_changed, %{entity_id: @entity_id, new_state: new_state}},
+              state
+            ) do
+          Logger.debug("Got new state for " <> entity_id)
+          {:noreply, state}
+        end
+
+        def handle_info(event, state) do
+          Logger.debug("Unhandled event")
+          {:noreply, state}
+        end
+      end
+
+  ## PubSub events
+
+  Once authenticated, the client broadcasts the following messages on `Homex.PubSub`:
+
+    * `{:state_changed, %{entity_id: String.t(), new_state: map(), old_state: map()}}` —
+      published on the `"state_changed"` topic whenever a Home Assistant entity changes state.
+
+    * `{:state_current, %{entity_id: String.t(), attributes: map(), state: String.t()}}` —
+      published on the `"state_current"` topic as a PubSub broadcase per result. This is triggered
+      by calling the `Homex.WebsocketClient.get_states/0` function.
+  """
+
+  use WebSockex
+  require Logger
+
+  @doc """
+  Starts the WebSocket client and links it to the calling process.
+
+  Connects to the Home Assistant WebSocket API at `ws://<host>:<port>/api/websocket`
+  and registers the process under the name `Homex.WebsocketClient`.
+
+  ## Args
+
+  The `args` argument is a keyword list with the following keys:
+
+    * `:host` — **(required)** the hostname or IP address of the Home Assistant instance.
+
+    * `:token` — **(required)** a long-lived access token used to authenticate with
+      the Home Assistant WebSocket API. Tokens can be generated from the Home Assistant
+      profile page under *Long-Lived Access Tokens*.
+
+    * `:port` — **(optional)** the port Home Assistant is listening on. Defaults to `8123`.
+  """
+  @spec start_link(Keyword.t()) :: {:ok, pid()} | {:error, term()}
+  def start_link(args) do
+    url = url(Keyword.fetch!(args, :host), Keyword.get(args, :port, 8123))
+
+    WebSockex.start_link(
+      url,
+      __MODULE__,
+      %{token: Keyword.fetch!(args, :token), url: url, last_id: 0},
+      name: __MODULE__
+    )
+  end
+
+  @doc """
+  Requests the list of all registered services from Home Assistant.
+
+  Sends a `get_services` command over the WebSocket connection. The response
+  is handled asynchronously via `handle_msg/2` and currently logged as an
+  unhandled result.
+  """
+  @spec get_services() :: :ok
+  def get_services, do: send(%{type: "get_services"})
+
+  @doc """
+  Requests the current state of all entities from Home Assistant.
+
+  Sends a `get_states` command over the WebSocket connection. The response
+  is handled asynchronously — each entity in the result list is broadcast
+  individually on `Homex.PubSub` under the `"state_current"` topic as:
+
+      {:state_current, %{entity_id: String.t(), attributes: map(), state: String.t()}}
+
+  ## Example
+
+      iex> HomeAssistant.PubSub.subscribe(Homex.PubSub, "state_current")
+      iex> Homex.WebsocketClient.get_states()
+      iex> receive do
+      ...>   {:state_current, %{entity_id: entity_id, state: state}} ->
+      ...>     IO.puts("\#{entity_id} is \#{inspect(state)}")
+      ...> end
+  """
+  @spec get_states() :: :ok
+  def get_states, do: send(%{type: "get_states"})
+
+  @doc """
+  Sends a message over the WebSocket connection.
+
+  Casts a message to the Websockex connection, encoding it as JSON.
+  A monotonically increasing `:id` field is automatically added to
+  each outgoing message.
+
+  ## Arguments
+
+    * `type` — the WebSocket frame type. Defaults to `:text`. See `WebSockex`
+      for supported frame types.
+
+    * `msg` — a map representing the message payload. Must include a `"type"`
+      key matching a [Home Assistant WebSocket command](https://developers.home-assistant.io/docs/api/websocket/#command-phase).
+
+  ## Examples
+
+      iex> Homex.WebsocketClient.send(%{type: "get_states"})
+
+      iex> Homex.WebsocketClient.send(%{
+      ...>   type: "call_service",
+      ...>   domain: "light",
+      ...>   service: "turn_on",
+      ...>   service_data: %{entity_id: "light.living_room"}
+      ...> })
+  """
+  @spec send(atom(), map()) :: :ok
+  def send(type \\ :text, %{} = msg), do: WebSockex.cast(__MODULE__, {:send, {type, msg}})
+
+  @impl true
+  def handle_cast({:send, {type, %{} = msg}}, state) do
+    msg_id = state.last_id + 1
+    msg = Map.put(msg, :id, msg_id)
+    IO.puts("Sending #{type} frame with payload: #{inspect(msg)}")
+    {:reply, {type, Jason.encode!(msg)}, %{state | last_id: msg_id}}
+  end
+
+  @impl true
+  def handle_frame({:text, msg}, state) do
+    case Jason.decode(msg) do
+      {:ok, msg} ->
+        # dbg(msg, limit: :infinity)
+        handle_msg(msg, state)
+
+      {:error, error} ->
+        Logger.warning("Couldn't decode message `#{inspect(error)}`:\n#{inspect(msg)}")
+        {:ok, state}
+    end
+  end
+
+  def handle_msg(%{"type" => "auth_required"}, %{token: token} = state) do
+    reply = Jason.encode!(%{type: "auth", access_token: token})
+    {:reply, {:text, reply}, state}
+  end
+
+  def handle_msg(%{"type" => "auth_ok"}, state) do
+    msg_id = state.last_id + 1
+    reply = Jason.encode!(%{id: msg_id, type: :subscribe_events, event_type: :state_changed})
+    {:reply, {:text, reply}, %{state | last_id: msg_id}}
+  end
+
+  def handle_msg(%{"type" => "event", "event" => event}, state) do
+    payload = %{
+      entity_id: event["data"]["entity_id"],
+      new_state: event["data"]["new_state"],
+      old_state: event["data"]["old_state"]
+    }
+
+    Phoenix.PubSub.broadcast(Homex.PubSub, "state_changed", {:state_changed, payload})
+    {:ok, state}
+  end
+
+  def handle_msg(%{"type" => "result", "result" => results}, state) when is_list(results) do
+    Enum.each(
+      results,
+      &Phoenix.PubSub.broadcast(
+        Homex.PubSub,
+        "state_current",
+        {:state_current,
+         %{
+           entity_id: &1["entity_id"],
+           current_state: Map.take(&1, ["attributes", "state", "device_class"])
+         }}
+      )
+    )
+
+    {:ok, state}
+  end
+
+  def handle_msg(msg, state) do
+    Logger.warning("Unhandled message: #{inspect(msg)}")
+    {:ok, state}
+  end
+
+  def url(host, port) when is_binary(host) and is_integer(port),
+    do: "ws://#{host}:#{port}/api/websocket"
+end
