@@ -2,6 +2,7 @@ defmodule Homex.Entity do
   @moduledoc """
   Defines the behaviour and struct for an entity implementation
   """
+  use GenServer
 
   @doc "The given name of the entity"
   @callback name() :: String.t()
@@ -38,14 +39,22 @@ defmodule Homex.Entity do
   @callback handle_timer(entity :: Entity.t()) :: entity :: t()
 
   @type t() :: %__MODULE__{
+          name: atom(),
           keys: MapSet.t(),
           values: map(),
           handlers: map(),
           changes: map(),
-          private: map()
+          private: map(),
+          impl: Module.t()
         }
 
-  defstruct values: %{}, changes: %{}, handlers: %{}, keys: MapSet.new(), private: %{}
+  defstruct name: nil,
+            values: %{},
+            changes: %{},
+            handlers: %{},
+            keys: MapSet.new(),
+            private: %{},
+            impl: nil
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
@@ -55,50 +64,7 @@ defmodule Homex.Entity do
 
       @update_interval opts[:update_interval]
 
-      use GenServer
-
-      def start_link(init_arg), do: GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
-
-      @impl GenServer
-      def init(_init_arg \\ []) do
-        case @update_interval do
-          :never -> :ok
-          time -> :timer.send_interval(time, :update)
-        end
-
-        {:ok, Entity.new() |> setup_entity() |> handle_init() |> Entity.execute_change(),
-         {:continue, :register}}
-      end
-
-      @impl GenServer
-      def handle_continue(:register, entity) do
-        Process.flag(:trap_exit, true)
-
-        for topic <- subscriptions() do
-          Registry.register(Homex.SubscriptionRegistry, topic, nil)
-        end
-
-        {:noreply, entity}
-      end
-
-      @impl GenServer
-      def handle_info({topic, payload}, entity) do
-        {:noreply, handle_message({topic, payload}, entity) |> Entity.execute_change()}
-      end
-
-      def handle_info(:update, entity) do
-        {:noreply,
-         entity
-         |> handle_timer()
-         |> Entity.execute_change()}
-      end
-
-      @impl GenServer
-      def terminate(_reason, entity) do
-        for topic <- subscriptions() do
-          Registry.unregister(Homex.SubscriptionRegistry, topic)
-        end
-      end
+      def update_interval, do: @update_interval
 
       @impl Homex.Entity
       def setup_entity(entity), do: entity
@@ -116,9 +82,26 @@ defmodule Homex.Entity do
     end
   end
 
+  def start_link(entity), do: GenServer.start_link(__MODULE__, entity, name: entity.name)
+
   @doc false
-  @spec new() :: t()
-  def new, do: %__MODULE__{}
+  @spec new(Keyword.t()) :: t()
+  def new(opts) do
+    if valid?(opts) do
+      struct(__MODULE__, opts)
+    else
+      nil
+    end
+  end
+
+  def valid?(%__MODULE__{}), do: true
+
+  def valid?(opts) when is_list(opts) do
+    Keyword.has_key?(opts, :name) and Keyword.has_key?(opts, :impl) and
+      implements_behaviour?(Keyword.get(opts, :impl))
+  end
+
+  def valid(_), do: false
 
   @doc false
   @spec register_handler(t(), atom(), fun(), term()) :: t()
@@ -193,5 +176,69 @@ defmodule Homex.Entity do
   def implements_behaviour?(module) when is_atom(module) do
     attrs = module.__info__(:attributes) |> Keyword.get_values(:behaviour) |> List.flatten()
     __MODULE__ in attrs
+  end
+
+  @impl GenServer
+  def init(%__MODULE__{} = entity) do
+    case entity.impl.update_interval() do
+      :never -> :ok
+      time -> :timer.send_interval(time, :update)
+    end
+
+    {:ok, entity |> entity.impl.setup_entity() |> entity.impl.handle_init() |> execute_change(),
+     {:continue, :register}}
+  end
+
+  @impl GenServer
+  def handle_call(:impl, _, entity) do
+    {:reply, entity.impl, entity}
+  end
+
+  def handle_call(:state, _, entity) do
+    {:reply, entity, entity}
+  end
+
+  # Fallback, passes the called msg along to the implementation for handling
+  def handle_call(msg, _, %{impl: impl} = entity) do
+    entity = impl.handle_call(msg, entity) |> execute_change()
+    {:reply, entity, entity}
+  end
+
+  @impl GenServer
+  # Fallback, passes the casted msg along to the implementation for handling and
+  # calling execute_change after.
+  def handle_cast(msg, %{impl: impl} = entity) do
+    entity = impl.handle_cast(msg, entity) |> execute_change()
+    {:noreply, entity}
+  end
+
+  @impl GenServer
+  def handle_info(:update, %{impl: impl} = entity) do
+    entity = entity |> impl.handle_timer() |> execute_change()
+    {:noreply, entity}
+  end
+
+  # Fallback, passes the info msg along to the implementation for handling
+  def handle_info(msg, %{impl: impl} = entity) do
+    entity = impl.handle_info(msg, entity) |> execute_change()
+    {:noreply, entity}
+  end
+
+  @impl GenServer
+  def terminate(_reason, entity) do
+    for topic <- entity.impl.subscriptions() do
+      Registry.unregister(Homex.SubscriptionRegistry, topic)
+    end
+  end
+
+  @impl GenServer
+  def handle_continue(:register, entity) do
+    Process.flag(:trap_exit, true)
+
+    for topic <- entity.impl.subscriptions() do
+      Registry.register(Homex.SubscriptionRegistry, topic, nil)
+    end
+
+    {:noreply, entity}
   end
 end
