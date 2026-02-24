@@ -19,7 +19,7 @@ by adding `homex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:homex, "~> 0.1.0"},
+    {:homex, "~> 0.1.1"},
     # If you want to use the MQTT library without QUIC support add
     # {:emqtt, github: "emqx/emqtt.git", tag: "1.14.7", override: true, system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}  ]
 end
