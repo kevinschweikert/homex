@@ -14,6 +14,7 @@ defmodule Homex do
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
       {Homex.Manager, config},
       {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
+      {Registry, name: Homex.WebsocketClient.registry_name(), keys: :duplicate},
       {Task, fn -> Homex.add_entities(config.entities) end}
     ]
 

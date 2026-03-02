@@ -1,14 +1,14 @@
 defmodule Homex.WebsocketClient do
+  @registry_name Homex.WebsocketRegistry
   @moduledoc """
   WebSocket client for the [Home Assistant WebSocket API](https://developers.home-assistant.io/docs/api/websocket).
 
   Establishes and maintains a persistent WebSocket connection to a Home Assistant
   instance. On connection, it authenticates using a long-lived access token and
-  subscribes to `state_changed` events. Incoming state change events are broadcast
-  over Phoenix PubSub via `Homex.PubSub` on the `"state_changed"` topic.
+  subscribes to `state_changed` events. Incoming state change events are dispatched
+  via a `Registry` named `#{@registry_name}`.
 
-  Phoenix PubSub is required for this module to function properly. A PubSub instance
-  named `Homex.PubSub` must also be started for it to work.
+  The `#{@registry_name}` instance is started with the `Homex` supervisor.
 
   This module is intended to be started under a supervision tree, typically as part
   of the application's main supervisor.
@@ -19,18 +19,17 @@ defmodule Homex.WebsocketClient do
         children =
           [
             ...,
-            Supervisor.child_spec({Phoenix.PubSub, name: Homex.PubSub}, id: :homex_pub_sub),
             {Homex.WebsocketClient,
-            token: Application.get_env(:my_app, :home_assistant_access_token),
-            host: Application.get_env(:my_app, :home_assistant_host),
-            port: Application.get_env(:my_app, :home_assistant_port, 8123)}
+              token: Application.get_env(:my_app, :home_assistant_access_token),
+              host: Application.get_env(:my_app, :home_assistant_host),
+              port: Application.get_env(:my_app, :home_assistant_port, 8123)}
           ]
 
         opts = [strategy: :one_for_one, name: MyApp.Supervisor]
         Supervisor.start_link(children, opts)
       end
 
-  ## Example GenServers that subscribe to Websocket's PubSub events
+  ## Example GenServers that subscribe to WebSocket Registry events
 
       defmodule MyApp.HomexHandler do
         use GenServer
@@ -42,7 +41,7 @@ defmodule Homex.WebsocketClient do
 
         @impl true
         def init(state) do
-          Phoenix.PubSub.subscribe(Homex.PubSub, "state_changed")
+          Homex.WebsocketClient.register("state_changed")
           {:ok, state}
         end
 
@@ -53,7 +52,7 @@ defmodule Homex.WebsocketClient do
               {:state_changed, %{entity_id: @entity_id, new_state: new_state}},
               state
             ) do
-          Logger.debug("Got new state for " <> entity_id)
+          Logger.debug("Got new state for " <> @entity_id)
           {:noreply, state}
         end
 
@@ -63,16 +62,18 @@ defmodule Homex.WebsocketClient do
         end
       end
 
-  ## PubSub events
+  ## Registry events
 
-  Once authenticated, the client broadcasts the following messages on `Homex.PubSub`:
+  Once authenticated, the client dispatches the following messages via `Homex.WebsocketClient.registry_name/0`:
 
     * `{:state_changed, %{entity_id: String.t(), new_state: map(), old_state: map()}}` —
-      published on the `"state_changed"` topic whenever a Home Assistant entity changes state.
+      dispatched on the `"state_changed"` topic whenever a Home Assistant entity changes state.
 
-    * `{:state_current, %{entity_id: String.t(), attributes: map(), state: String.t()}}` —
-      published on the `"state_current"` topic as a PubSub broadcase per result. This is triggered
-      by calling the `Homex.WebsocketClient.get_states/0` function.
+    * `{:state_current, %{entity_id: String.t(), current_state: map()}}` —
+      dispatched on the `"state_current"` topic per result. This is triggered
+      by calling `Homex.WebsocketClient.get_states/0`.
+
+  Use `register/2` to subscribe the calling process to a topic.
   """
 
   use WebSockex
@@ -108,6 +109,24 @@ defmodule Homex.WebsocketClient do
     )
   end
 
+  @registry_topics ["state_changed", "state_current"]
+  def registry_name, do: @registry_name
+  def registry_topic, do: "homex_websocket_client"
+
+  @doc """
+  Registers the calling process to receive dispatched messages for the given topic.
+
+  The `topic` must be one of `"state_changed"` or `"state_current"`. Once registered,
+  the process will receive messages of the form `{:state_changed, payload}` or
+  `{:state_current, payload}` respectively.
+
+  ## Example
+
+      Homex.WebsocketClient.register("state_changed")
+  """
+  def register(topic, opts \\ []) when topic in @registry_topics,
+    do: Registry.register(registry_name(), topic, opts)
+
   @doc """
   Requests the list of all registered services from Home Assistant.
 
@@ -122,18 +141,18 @@ defmodule Homex.WebsocketClient do
   Requests the current state of all entities from Home Assistant.
 
   Sends a `get_states` command over the WebSocket connection. The response
-  is handled asynchronously — each entity in the result list is broadcast
-  individually on `Homex.PubSub` under the `"state_current"` topic as:
+  is handled asynchronously — each entity in the result list is dispatched
+  individually via `#{@registry_name}` on the `"state_current"` topic as:
 
-      {:state_current, %{entity_id: String.t(), attributes: map(), state: String.t()}}
+      {:state_current, %{entity_id: String.t(), current_state: map()}}
 
   ## Example
 
-      iex> HomeAssistant.PubSub.subscribe(Homex.PubSub, "state_current")
+      iex> Homex.WebsocketClient.register("state_current")
       iex> Homex.WebsocketClient.get_states()
       iex> receive do
-      ...>   {:state_current, %{entity_id: entity_id, state: state}} ->
-      ...>     IO.puts("\#{entity_id} is \#{inspect(state)}")
+      ...>   {:state_current, %{entity_id: entity_id, current_state: current_state}} ->
+      ...>     IO.puts("\#{entity_id} is \#{inspect(current_state)}")
       ...> end
   """
   @spec get_states() :: :ok
@@ -207,22 +226,17 @@ defmodule Homex.WebsocketClient do
       old_state: event["data"]["old_state"]
     }
 
-    Phoenix.PubSub.broadcast(Homex.PubSub, "state_changed", {:state_changed, payload})
+    dispatch("state_changed", payload)
     {:ok, state}
   end
 
   def handle_msg(%{"type" => "result", "result" => results}, state) when is_list(results) do
     Enum.each(
       results,
-      &Phoenix.PubSub.broadcast(
-        Homex.PubSub,
-        "state_current",
-        {:state_current,
-         %{
-           entity_id: &1["entity_id"],
-           current_state: Map.take(&1, ["attributes", "state", "device_class"])
-         }}
-      )
+      &dispatch("state_current", %{
+        entity_id: &1["entity_id"],
+        current_state: Map.take(&1, ["attributes", "state", "device_class"])
+      })
     )
 
     {:ok, state}
@@ -235,4 +249,12 @@ defmodule Homex.WebsocketClient do
 
   def url(host, port) when is_binary(host) and is_integer(port),
     do: "ws://#{host}:#{port}/api/websocket"
+
+  defp dispatch(topic, payload) do
+    Registry.dispatch(
+      registry_name(),
+      topic,
+      &for({pid, _} <- &1, do: Kernel.send(pid, {String.to_atom(topic), payload}))
+    )
+  end
 end
