@@ -70,7 +70,8 @@ defmodule Homex.MixProject do
       {:emqtt, "~> 1.14.7"},
       {:ex_doc, "~> 0.38", only: :docs},
       {:jason, "~> 1.4"},
-      {:nimble_options, "~> 1.1"}
+      {:nimble_options, "~> 1.1"},
+      {:websockex, "~> 0.5.1"}
     ]
   end
 end
