@@ -38,6 +38,12 @@ defmodule Homex.WebsocketClient do
     end
   end
 
+  @impl true
+  def handle_disconnect(%{reason: reason}, state) do
+    Logger.warning("WebSocket disconnected, attempting reconnect: #{inspect(reason)}")
+    {:reconnect, state}
+  end
+
   def handle_msg(%{"type" => "auth_required"}, %{token: token} = state) do
     reply = Jason.encode!(%{type: "auth", access_token: token})
     {:reply, {:text, reply}, state}
