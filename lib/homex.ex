@@ -12,10 +12,7 @@ defmodule Homex do
 
     children = [
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
-      # Registry must start before the Manager: on MQTT connect the Manager
-      # runs Registry.select(Homex.SubscriptionRegistry, ...) from its
-      # :subscribe_to_topics continuation. With a fast (LAN) broker that ran
-      # before the registry existed, crashing the tree with "unknown registry".
+      # Registry must start before the Manager to avoid a race
       {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
       {Homex.Manager, config},
       {Task, fn -> Homex.add_entities(config.entities) end}
