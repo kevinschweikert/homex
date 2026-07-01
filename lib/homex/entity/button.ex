@@ -98,7 +98,7 @@ defmodule Homex.Entity.Button do
         entity
       end
 
-      def handle_message({@command_topic, @action}, entity) do
+      def handle_message({@command_topic, @payload_press}, entity) do
         entity |> handle_press()
       end
 
