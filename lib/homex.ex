@@ -12,8 +12,9 @@ defmodule Homex do
 
     children = [
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
-      {Homex.Manager, config},
+      # Registry must start before the Manager
       {Registry, name: Homex.SubscriptionRegistry, keys: :duplicate, listeners: [Homex.Manager]},
+      {Homex.Manager, config},
       {Task, fn -> Homex.add_entities(config.entities) end}
     ]
 
