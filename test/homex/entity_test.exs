@@ -1,48 +1,61 @@
 defmodule Homex.EntityTest do
-  use ExUnit.Case, async: true
+  use Homex.EntityCase, async: true
 
-  alias Homex.Entity
+  defmodule TestSwitch do
+    use Homex.Entity.Switch, name: "entity-test-switch"
+  end
 
-  describe "struct helper" do
-    test "register_handler/3" do
-      entity =
-        %Entity{}
-        |> Entity.register_handler(:test, &Function.identity/1)
+  defp entity(fields) do
+    %Entity{name: :test, descriptor: %Descriptor{kind: :switch, fields: fields}}
+  end
 
-      assert :test in entity.keys
-      assert %{test: nil} = entity.values
-      assert %{test: _} = entity.handlers
+  describe "put_change/3" do
+    test "records changes for known fields" do
+      entity = entity(%{state: :state}) |> Entity.put_change(:state, true)
+
+      assert %{state: true} = entity.changes
     end
 
-    test "put_change/3" do
-      entity =
-        %Entity{}
-        |> Entity.register_handler(:test, &Function.identity/1)
-        |> Entity.put_change(:test, 10)
+    test "ignores unknown fields" do
+      entity = entity(%{state: :state}) |> Entity.put_change(:bogus, true)
 
-      assert %{test: 10} = entity.changes
-    end
-
-    test "handle_changes/1" do
-      entity =
-        %Entity{}
-        |> Entity.register_handler(:test, fn val -> send(self(), val) end)
-        |> Entity.put_change(:test, 10)
-        |> Entity.execute_change()
-
-      assert_receive 10
-      assert Map.keys(entity.changes) == []
-
-      entity
-      |> Entity.put_change(:test, 10)
-      |> Entity.execute_change()
-
-      refute_receive 10
+      assert entity.changes == %{}
     end
   end
 
-  defmodule TestSwitch do
-    use Homex.Entity.Switch, name: "test-switch"
+  describe "execute_change/1" do
+    test "publishes the diff to all adapters and commits the values" do
+      entity =
+        entity(%{state: :state})
+        |> Entity.put_change(:state, true)
+        |> Entity.execute_change()
+
+      assert_receive {:publish_state, %Descriptor{kind: :switch}, %{state: true}}
+      assert entity.values == %{state: true}
+      assert entity.changes == %{}
+    end
+
+    test "does not publish unchanged values" do
+      entity =
+        entity(%{state: :state})
+        |> Entity.put_change(:state, true)
+        |> Entity.execute_change()
+
+      assert_receive {:publish_state, _, %{state: true}}
+
+      entity |> Entity.put_change(:state, true) |> Entity.execute_change()
+
+      refute_receive {:publish_state, _, _}
+    end
+
+    test "existing values stay untouched" do
+      entity =
+        %{entity(%{state: :state, other: :state}) | values: %{state: nil, other: :foo}}
+        |> Entity.put_change(:state, true)
+        |> Entity.execute_change()
+
+      assert entity.values == %{state: true, other: :foo}
+    end
   end
 
   describe "new/1" do
@@ -61,24 +74,31 @@ defmodule Homex.EntityTest do
     end
   end
 
+  describe "instance names" do
+    test "two instances of one impl run side by side with distinct identities" do
+      start_supervised!({Entity, Entity.new(TestSwitch)}, id: :default)
+
+      start_supervised!({Entity, Entity.new(name: "second-switch", impl: TestSwitch)},
+        id: :second
+      )
+
+      assert {:ok, %Descriptor{name: "entity-test-switch", unique_id: default_id}} =
+               Homex.descriptor("entity-test-switch")
+
+      assert {:ok, %Descriptor{name: "second-switch", unique_id: second_id}} =
+               Homex.descriptor("second-switch")
+
+      assert default_id != second_id
+
+      Entity.send_command("second-switch", %{state: true})
+      assert_receive {:publish_state, %Descriptor{name: "second-switch"}, %{state: true}}
+    end
+  end
+
   describe "valid?/1" do
     test "accepts bare modules implementing the behaviour" do
       assert Entity.valid?(TestSwitch)
       refute Entity.valid?(Enum)
-    end
-  end
-
-  describe "execute_change/1" do
-    test "existing values should stay" do
-      entity =
-        %Entity{}
-        |> Entity.register_handler(:test, &Function.identity/1, :bar)
-        |> Entity.register_handler(:test_two, &Function.identity/1, :foo)
-        |> Entity.put_change(:test, 10)
-        |> Entity.execute_change()
-
-      assert entity.values.test == 10
-      assert entity.values.test_two == :foo
     end
   end
 end

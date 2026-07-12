@@ -13,6 +13,12 @@ defmodule Homex.Entity.Button do
                    default: nil,
                    doc:
                      "The type/class of the button to set the icon in the frontend. The device_class can be nil."
+                 ],
+                 retain: [
+                   required: false,
+                   type: :boolean,
+                   default: false,
+                   doc: "if the last state should be retained"
                  ]
                ]
                |> NimbleOptions.new!()
@@ -62,52 +68,29 @@ defmodule Homex.Entity.Button do
 
       @behaviour Homex.Entity.Button
 
-      @name opts[:name]
-      @platform "button"
-      @unique_id Homex.unique_id(@name, [@platform])
-      @command_topic "homex/#{@platform}/#{@unique_id}/press"
-      @json_attributes_topic "homex/#{@platform}/#{@unique_id}/attributes"
-      @payload_press "PRESS"
-
       @impl Homex.Entity
-      def name, do: @name
-
-      @impl Homex.Entity
-      def unique_id, do: @unique_id
-
-      @impl Homex.Entity
-      def platform(), do: @platform
-
-      @impl Homex.Entity
-      def subscriptions, do: [@command_topic]
-
-      @impl Homex.Entity
-      def config do
-        %{
-          platform: @platform,
-          command_topic: @command_topic,
-          json_attributes_topic: @json_attributes_topic,
-          name: @name,
-          unique_id: @unique_id,
-          payload_press: @payload_press
+      def descriptor do
+        %Homex.Descriptor{
+          kind: :button,
+          fields: %{pressed: :event, attrs: :state},
+          name: unquote(opts[:name]),
+          options: %{device_class: unquote(opts[:device_class])},
+          transport: %{mqtt: [retain: unquote(opts[:retain])]}
         }
       end
 
-      @impl Homex.Entity
-      def setup_entity(entity) do
-        entity
-      end
-
-      def handle_message({@command_topic, @payload_press}, entity) do
+      def handle_command(%{pressed: true}, entity) do
         entity |> handle_press()
       end
+
+      def handle_command(_cmd, entity), do: entity
 
       @impl Homex.Entity.Button
       def handle_press(entity), do: entity
 
       @impl Homex.Entity.Button
       def set_attributes(%Entity{} = entity, attrs) when is_map(attrs) do
-        Entity.put_change(entity, :attrs, Jason.encode!(attrs))
+        Entity.put_change(entity, :attrs, attrs)
       end
 
       @impl Homex.Entity

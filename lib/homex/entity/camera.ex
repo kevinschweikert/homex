@@ -93,59 +93,20 @@ defmodule Homex.Entity.Camera do
       use Homex.Entity, update_interval: opts[:update_interval]
       @behaviour Homex.Entity.Camera
 
-      @name opts[:name]
-      @platform "camera"
-      @unique_id Homex.unique_id(@name, [@platform])
-      @topic "homex/#{@platform}/#{@unique_id}"
-      @json_attributes_topic "homex/#{@platform}/#{@unique_id}/attributes"
-      @retain opts[:retain]
-      @encoding opts[:encoding]
-      @image_encoding opts[:image_encoding]
-      @enabled_by_default opts[:enabled_by_default]
-
       @impl Homex.Entity
-      def name, do: @name
-
-      @impl Homex.Entity
-      def unique_id, do: @unique_id
-
-      @impl Homex.Entity
-      def subscriptions, do: []
-
-      @impl Homex.Entity
-      def platform(), do: @platform
-
-      @impl Homex.Entity
-      def config do
-        %{
-          platform: @platform,
-          topic: @topic,
-          json_attributes_topic: @json_attributes_topic,
-          name: @name,
-          unique_id: @unique_id,
-          encoding: @encoding,
-          image_encoding: @image_encoding,
-          enabled_by_default: @enabled_by_default
+      def descriptor do
+        %Homex.Descriptor{
+          kind: :camera,
+          fields: %{image: :state, attrs: :state},
+          name: unquote(opts[:name]),
+          options: %{
+            encoding: unquote(opts[:encoding]),
+            image_encoding: unquote(opts[:image_encoding]),
+            enabled_by_default: unquote(opts[:enabled_by_default])
+          },
+          transport: %{mqtt: [retain: unquote(opts[:retain])]}
         }
-        |> Map.reject(fn {_key, val} -> is_nil(val) end)
       end
-
-      @impl Homex.Entity
-      def setup_entity(entity) do
-        entity
-        |> Entity.register_handler(:image, fn image ->
-          Homex.publish(@topic, image, retain: @retain)
-        end)
-        |> Entity.register_handler(:attrs, fn attrs ->
-          Homex.publish(@json_attributes_topic, attrs, retain: @retain)
-        end)
-      end
-
-      @impl Homex.Entity
-      def handle_init(entity), do: super(entity)
-
-      @impl Homex.Entity
-      def handle_timer(entity), do: super(entity)
 
       @impl Homex.Entity.Camera
       def set_image(%Entity{} = entity, image) when is_binary(image) do
@@ -154,8 +115,14 @@ defmodule Homex.Entity.Camera do
 
       @impl Homex.Entity.Camera
       def set_attributes(%Entity{} = entity, attrs) when is_map(attrs) do
-        Entity.put_change(entity, :attrs, Jason.encode!(attrs))
+        Entity.put_change(entity, :attrs, attrs)
       end
+
+      @impl Homex.Entity
+      def handle_init(entity), do: super(entity)
+
+      @impl Homex.Entity
+      def handle_timer(entity), do: super(entity)
 
       defoverridable handle_init: 1, handle_timer: 1
     end
