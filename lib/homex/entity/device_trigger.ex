@@ -71,8 +71,6 @@ defmodule Homex.Entity.DeviceTrigger do
       @device_type opts[:type]
       @subtype opts[:subtype]
 
-      def trigger, do: GenServer.cast(__MODULE__, :trigger)
-
       @impl Homex.Entity
       def name, do: @name
 
@@ -109,12 +107,6 @@ defmodule Homex.Entity.DeviceTrigger do
 
       @impl Homex.Entity
       def handle_init(entity), do: super(entity)
-
-      @impl GenServer
-      def handle_cast(:trigger, entity) do
-        entity |> Entity.put_change(:trigger, @payload) |> Entity.execute_change()
-        {:noreply, entity}
-      end
 
       defoverridable handle_init: 1
     end

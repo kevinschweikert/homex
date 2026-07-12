@@ -16,7 +16,6 @@ defmodule Homex.Manager do
     :device,
     :origin,
     connected: false,
-    entities: [],
     entities_to_remove: []
   ]
 
@@ -31,9 +30,7 @@ defmodule Homex.Manager do
   @type pubopt() :: {:retain, boolean()} | {:qos, qos() | qos_name()}
 
   @spec connected?() :: boolean()
-  def connected? do
-    GenServer.call(__MODULE__, :is_connected)
-  end
+  def connected?, do: GenServer.call(__MODULE__, :is_connected)
 
   @doc """
   Let's you publish additional messages to a topic
@@ -42,10 +39,7 @@ defmodule Homex.Manager do
           :ok | {:error, Jason.EncodeError.t() | Exception.t()}
 
   def publish(topic, payload, opts \\ [])
-
-  def publish(topic, payload, opts) when is_binary(payload) do
-    do_publish(topic, payload, opts)
-  end
+  def publish(topic, payload, opts) when is_binary(payload), do: do_publish(topic, payload, opts)
 
   def publish(topic, payload, opts) do
     with {:ok, payload} <- Jason.encode(payload) do
@@ -53,31 +47,47 @@ defmodule Homex.Manager do
     end
   end
 
-  defp do_publish(topic, payload, opts) do
-    GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
+  defp do_publish(topic, payload, opts),
+    do: GenServer.cast(__MODULE__, {:publish, topic, payload, opts})
+
+  def entities do
+    DynamicSupervisor.which_children(Homex.EntitySupervisor)
+    |> Enum.map(fn {_id, pid, _type, _module} -> GenServer.call(pid, :state) end)
+    |> List.flatten()
   end
+
+  @doc """
+  Finds an Entity by its name or implementing module.
+  """
+  @spec entity(module()) :: Entity.t() | nil
+  @spec entity(String.t()) :: Entity.t() | nil
+  def entity(module) when is_atom(module), do: find_entity(&(&1.impl == module))
+  def entity(name) when is_binary(name), do: find_entity(&(&1.impl.name() == name))
+
+  def find_entity(func) when is_function(func, 1), do: Enum.find(entities(), &func.(&1))
 
   @doc """
   Adds a module to the entities and updates the discovery config, so that Home Assistant also adds this entity.
   """
-  @spec add_entity(atom()) :: :ok | {:error, atom()}
-  def add_entity(module) when is_atom(module) do
-    if Homex.Entity.implements_behaviour?(module) do
-      GenServer.call(__MODULE__, {:add_entity, module})
+  @spec add_entity(Keyword.t()) :: :ok | {:error, atom()}
+  def add_entity(opts) do
+    with %Homex.Entity{} = entity <- Homex.Entity.new(opts) do
+      GenServer.call(__MODULE__, {:add_entity, entity})
     else
-      Logger.error("Can't add entity.Behaviour Homex.Entity missing for #{module}")
-      {:error, :entity_behaviour_missing}
+      nil ->
+        Logger.error("Can't add entity, invalid configuration #{inspect(opts)}")
+        {:error, :entity_invalid}
     end
   end
 
   @doc """
   Adds multiple modules to the entities and updates the discovery config, so that Home Assistant also adds the entities.
-  Returns a list of started modules.
+  Returns a list of started entities.
   """
   @spec add_entities([atom()]) :: [atom()]
-  def add_entities(entities) when is_list(entities) do
-    if Enum.all?(entities, &Homex.Entity.implements_behaviour?/1) do
-      GenServer.call(__MODULE__, {:add_entities, entities})
+  def add_entities(opts) when is_list(opts) do
+    if Enum.all?(opts, &Homex.Entity.valid?/1) do
+      GenServer.call(__MODULE__, {:add_entities, Enum.map(opts, &Homex.Entity.new/1)})
     else
       Logger.error("Can't add entity.Behaviour Homex.Entity missing for one or more modules")
       {:error, :entity_behaviour_missing}
@@ -88,13 +98,8 @@ defmodule Homex.Manager do
   Removes a registered module from the entities and updates the discovery config, so that Home Assistant also removes this entity.
   """
   @spec remove_entity(atom()) :: :ok | {:error, atom()}
-  def remove_entity(module) when is_atom(module) do
-    if Homex.Entity.implements_behaviour?(module) do
-      GenServer.call(__MODULE__, {:remove_entity, module})
-    else
-      Logger.error("Can't remove entity.Behaviour Homex.Entity missing for #{module}")
-      {:error, :entity_behaviour_missing}
-    end
+  def remove_entity(name) when is_atom(name) do
+    GenServer.call(__MODULE__, {:remove_entity, name})
   end
 
   @impl GenServer
@@ -157,19 +162,18 @@ defmodule Homex.Manager do
           entities_to_remove: entities_to_remove
         } = state
       ) do
-    entities =
-      DynamicSupervisor.which_children(Homex.EntitySupervisor)
-      |> Enum.map(fn {_id, _pid, _type, modules} -> modules end)
-      |> List.flatten()
+    entities = entities()
 
     components =
-      for module <- entities, into: %{} do
-        {module.unique_id(), module.config()}
+      for entity <- entities, into: %{} do
+        {entity.impl.unique_id(), entity.impl.config()}
       end
 
     components =
-      for module <- entities_to_remove, into: components do
-        {module.unique_id(), %{platform: module.platform()}}
+      for name <- entities_to_remove, into: components do
+        # TODO is there a way to do this without a genserver call?
+        entity = GenServer.call(name, :state)
+        {entity.impl.unique_id(), %{platform: entity.impl.platform()}}
       end
 
     discovery_config = %{
@@ -178,8 +182,7 @@ defmodule Homex.Manager do
       components: components
     }
 
-    topic =
-      "#{discovery_prefix}/device/#{Homex.escape(device.name)}/config"
+    topic = "#{discovery_prefix}/device/#{Homex.escape(device.name)}/config"
 
     payload = Jason.encode!(discovery_config)
 
@@ -195,9 +198,10 @@ defmodule Homex.Manager do
     {:reply, connected, state}
   end
 
-  def handle_call({:add_entity, module}, _from, %__MODULE__{} = state) do
-    with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
-      Logger.info("added entity #{module.name()}")
+  def handle_call({:add_entity, entity}, _from, %__MODULE__{} = state) do
+    with {:ok, _pid} <-
+           DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, entity}) do
+      Logger.info("added entity #{entity.name} of #{entity.impl.name()}")
 
       {:reply, :ok, state, {:continue, :publish_discovery_config}}
     else
@@ -206,15 +210,19 @@ defmodule Homex.Manager do
     end
   end
 
-  def handle_call({:add_entities, modules}, _from, %__MODULE__{} = state) do
+  def handle_call({:add_entities, entities}, _from, %__MODULE__{} = state) do
     started =
-      for module <- modules do
-        with {:ok, _pid} <- DynamicSupervisor.start_child(Homex.EntitySupervisor, module) do
-          Logger.info("added entity #{module.name()}")
-          module
+      for entity <- entities do
+        with {:ok, _pid} <-
+               DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, entity}) do
+          Logger.info("added entity #{entity.name} of #{entity.impl.name()}")
+          entity
         else
           {:error, error} ->
-            Logger.info("Failed to start entity #{module.name()}, reason #{inspect(error)}")
+            Logger.info(
+              "Failed to start entity #{entity.name} of #{entity.impl.name()}, reason #{inspect(error)}"
+            )
+
             []
         end
       end
@@ -223,21 +231,21 @@ defmodule Homex.Manager do
   end
 
   def handle_call(
-        {:remove_entity, module},
+        {:remove_entity, name},
         _from,
         %__MODULE__{entities_to_remove: entities_to_remove} = state
       ) do
     child =
       DynamicSupervisor.which_children(Homex.EntitySupervisor)
-      |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, modules} ->
-        module in modules
+      |> Enum.find({:error, :entity_not_found}, fn {_id, _pid, _type, names} ->
+        name in names
       end)
 
     with {_id, pid, _type, _modules} <- child,
          :ok <- DynamicSupervisor.terminate_child(Homex.EntitySupervisor, pid) do
-      Logger.info("removed entity #{module.name()}")
+      Logger.info("removed entity #{name}")
 
-      {:reply, :ok, %{state | entities_to_remove: [module | entities_to_remove]},
+      {:reply, :ok, %{state | entities_to_remove: [name | entities_to_remove]},
        {:continue, :publish_discovery_config}}
     else
       {:error, error} -> {:reply, {:error, error}, state}
