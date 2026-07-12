@@ -49,7 +49,11 @@ defmodule Homex.Config do
                      doc:
                        "if changed in Homeassistant you also need to change it here to enable autodiscovery. The default works for a standard installation"
                    ],
-                   entities: [required: false, default: [], type: {:list, :keyword_list}],
+                   entities: [
+                     required: false,
+                     default: [],
+                     type: {:list, {:or, [:atom, :keyword_list]}}
+                   ],
                    broker: [
                      required: false,
                      default: [],
@@ -76,7 +80,7 @@ defmodule Homex.Config do
            device: map(),
            origin: map(),
            discovery_prefix: String.t(),
-           entities: [module()],
+           entities: [module() | Keyword.t()],
            broker: [
              name: atom(),
              host: charlist(),

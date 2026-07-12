@@ -85,7 +85,9 @@ defmodule Homex.Entity do
   def start_link(entity), do: GenServer.start_link(__MODULE__, entity, name: entity.name)
 
   @doc false
-  @spec new(Keyword.t()) :: t()
+  @spec new(module() | Keyword.t()) :: t() | nil
+  def new(module) when is_atom(module), do: new(name: module, impl: module)
+
   def new(opts) do
     if valid?(opts) do
       struct(__MODULE__, opts)
@@ -96,12 +98,14 @@ defmodule Homex.Entity do
 
   def valid?(%__MODULE__{}), do: true
 
+  def valid?(module) when is_atom(module), do: implements_behaviour?(module)
+
   def valid?(opts) when is_list(opts) do
     Keyword.has_key?(opts, :name) and Keyword.has_key?(opts, :impl) and
       implements_behaviour?(Keyword.get(opts, :impl))
   end
 
-  def valid(_), do: false
+  def valid?(_), do: false
 
   @doc false
   @spec register_handler(t(), atom(), fun(), term()) :: t()
@@ -199,17 +203,25 @@ defmodule Homex.Entity do
   end
 
   # Fallback, passes the called msg along to the implementation for handling
-  def handle_call(msg, _, %{impl: impl} = entity) do
-    entity = impl.handle_call(msg, entity) |> execute_change()
-    {:reply, entity, entity}
+  def handle_call(msg, _from, %{impl: impl} = entity) do
+    if function_exported?(impl, :handle_call, 2) do
+      {reply, entity} = impl.handle_call(msg, entity)
+      {:reply, reply, execute_change(entity)}
+    else
+      {:reply, {:error, :not_handled}, entity}
+    end
   end
 
   @impl GenServer
   # Fallback, passes the casted msg along to the implementation for handling and
   # calling execute_change after.
   def handle_cast(msg, %{impl: impl} = entity) do
-    entity = impl.handle_cast(msg, entity) |> execute_change()
-    {:noreply, entity}
+    if function_exported?(impl, :handle_cast, 2) do
+      entity = impl.handle_cast(msg, entity) |> execute_change()
+      {:noreply, entity}
+    else
+      {:noreply, entity}
+    end
   end
 
   @impl GenServer
@@ -218,10 +230,20 @@ defmodule Homex.Entity do
     {:noreply, entity}
   end
 
+  # Subscription messages dispatched by the Manager arrive as {topic, payload}
+  def handle_info({topic, _payload} = msg, %{impl: impl} = entity) when is_binary(topic) do
+    entity = impl.handle_message(msg, entity) |> execute_change()
+    {:noreply, entity}
+  end
+
   # Fallback, passes the info msg along to the implementation for handling
   def handle_info(msg, %{impl: impl} = entity) do
-    entity = impl.handle_info(msg, entity) |> execute_change()
-    {:noreply, entity}
+    if function_exported?(impl, :handle_info, 2) do
+      entity = impl.handle_info(msg, entity) |> execute_change()
+      {:noreply, entity}
+    else
+      {:noreply, entity}
+    end
   end
 
   @impl GenServer

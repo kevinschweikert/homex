@@ -5,7 +5,7 @@ Mix.install([
   {:homex, path: __DIR__},
   ], config: [
   homex: [
-    entities: [MySwitch, MyTemperature, MyHumidity, MyLight]
+    entities: [MySwitch, MyTemperature, MyHumidity, MyLight, MyButton]
   ]
 ])
 ```
@@ -36,7 +36,6 @@ defmodule MyTemperature do
   def handle_timer(entity) do
     entity |> set_value(Enum.random(-40..40//1))
   end
-
 end
 
 defmodule MyHumidity do
@@ -50,13 +49,22 @@ defmodule MyHumidity do
   end
 end
 
+defmodule MyButton do
+  use Homex.Entity.Button, name: "my-button"
+
+  def handle_press(entity) do
+    IO.puts("my button was pressed")
+    entity
+  end
+end
+
 defmodule MyLight do
   use Homex.Entity.Light, name: "my-light", modes: [:brightness]
 
   def handle_init(entity) do
     entity |> set_on() |> set_brightness(50)
   end
-  
+
   def handle_brightness(entity, brightness) do
     IO.puts("Light set to #{brightness}%")
     entity

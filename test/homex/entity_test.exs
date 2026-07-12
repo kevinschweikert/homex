@@ -41,6 +41,33 @@ defmodule Homex.EntityTest do
     end
   end
 
+  defmodule TestSwitch do
+    use Homex.Entity.Switch, name: "test-switch"
+  end
+
+  describe "new/1" do
+    test "accepts a bare module, defaulting name and impl to it" do
+      assert %Entity{name: TestSwitch, impl: TestSwitch} = Entity.new(TestSwitch)
+    end
+
+    test "accepts a keyword list with name and impl" do
+      assert %Entity{name: :my_switch, impl: TestSwitch} =
+               Entity.new(name: :my_switch, impl: TestSwitch)
+    end
+
+    test "returns nil for invalid input" do
+      assert Entity.new(name: :missing_impl) == nil
+      assert Entity.new(%{}) == nil
+    end
+  end
+
+  describe "valid?/1" do
+    test "accepts bare modules implementing the behaviour" do
+      assert Entity.valid?(TestSwitch)
+      refute Entity.valid?(Enum)
+    end
+  end
+
   describe "execute_change/1" do
     test "existing values should stay" do
       entity =
