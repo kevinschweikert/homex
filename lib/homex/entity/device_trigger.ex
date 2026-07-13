@@ -57,53 +57,32 @@ defmodule Homex.Entity.DeviceTrigger do
 
   alias Homex.Entity
 
+  @doc "fires a trigger to the entity"
+  def trigger(name), do: Homex.notify(name, :device_trigger_fire)
+
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @opts_schema)
 
     quote bind_quoted: [opts: opts], generated: true do
       use Homex.Entity
 
-      @name opts[:name]
-      @platform "device_automation"
-      @unique_id Homex.unique_id(@name, [@platform])
-      @state_topic "homex/#{@platform}/#{@unique_id}/action"
-      @payload opts[:payload]
-      @device_type opts[:type]
-      @subtype opts[:subtype]
-
       @impl Homex.Entity
-      def name, do: @name
-
-      @impl Homex.Entity
-      def unique_id, do: @unique_id
-
-      @impl Homex.Entity
-      def platform, do: @platform
-
-      @impl Homex.Entity
-      def subscriptions, do: []
-
-      @impl Homex.Entity
-      def config do
-        %{
-          platform: @platform,
-          name: @name,
-          unique_id: @unique_id,
-          type: @device_type,
-          payload: @payload,
-          topic: "homex/#{@platform}/#{@unique_id}/action",
-          automation_type: "trigger",
-          subtype: @subtype
+      def descriptor do
+        %Homex.Descriptor{
+          kind: :device_trigger,
+          fields: %{trigger: :event},
+          name: unquote(opts[:name]),
+          options: %{
+            type: unquote(opts[:type]),
+            subtype: unquote(opts[:subtype]),
+            payload: unquote(opts[:payload]),
+            enabled_by_default: unquote(opts[:enabled_by_default])
+          }
         }
       end
 
-      @impl Homex.Entity
-      def setup_entity(entity) do
-        entity
-        |> Entity.register_handler(:trigger, fn val ->
-          Homex.publish(@state_topic, @payload, [])
-        end)
-      end
+      def handle_info(:device_trigger_fire, entity), do: Entity.put_change(entity, :trigger, true)
+      def handle_info(_, entity), do: entity
 
       @impl Homex.Entity
       def handle_init(entity), do: super(entity)

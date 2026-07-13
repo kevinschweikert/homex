@@ -64,6 +64,7 @@ defmodule Homex.Entity.Light do
   end
   ```
   """
+
   def modes(mode) when mode in @implemented_modes, do: {:ok, [mode]}
   def modes(mode) when is_atom(mode), do: {:error, :not_implemented}
 
@@ -104,31 +105,10 @@ defmodule Homex.Entity.Light do
   @callback handle_off(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
 
   @doc """
-  Gets called when a new brightness value gets published to the brightness command topic 
+  Gets called when a new brightness value gets published to the brightness command topic
   """
   @callback handle_brightness(entity :: Entity.t(), brightness :: float()) ::
               entity :: Entity.t() | {:error, reason :: term()}
-
-  @doc false
-  @spec convert_brightness(String.t(), integer()) ::
-          {:ok, float()} | {:error, :invalid_brightness}
-  def convert_brightness(brightness, precision \\ 2) when is_binary(brightness) do
-    with {value, ""} when value >= 0 and value <= 255 <- Integer.parse(brightness) do
-      percentage = value * 100 / 255
-      {:ok, Float.round(percentage, precision)}
-    else
-      _ -> {:error, :invalid_brightness}
-    end
-  end
-
-  @doc false
-  def mode_or(modes, mode, term, default \\ nil) do
-    if mode in modes do
-      term
-    else
-      default
-    end
-  end
 
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @opts_schema)
@@ -137,117 +117,59 @@ defmodule Homex.Entity.Light do
       use Homex.Entity, update_interval: opts[:update_interval]
 
       @behaviour Homex.Entity.Light
-      import Homex.Entity.Light
-
-      @name opts[:name]
       @modes opts[:modes]
-      @platform "light"
-      @unique_id Homex.unique_id(@name, [@platform])
-      @state_topic "homex/#{@platform}/#{@unique_id}"
-      @command_topic "homex/#{@platform}/#{@unique_id}/set"
-      @brightness_state_topic mode_or(
-                                @modes,
-                                :brightness,
-                                "homex/#{@platform}/#{@unique_id}/brightness"
-                              )
-      @brightness_command_topic mode_or(
-                                  @modes,
-                                  :brightness,
-                                  "homex/#{@platform}/#{@unique_id}/brightness/set"
-                                )
-      @on_payload "ON"
-      @off_payload "OFF"
-      @retain opts[:retain]
 
       @impl Homex.Entity
-      def name, do: @name
-
-      @impl Homex.Entity
-      def unique_id, do: @unique_id
-
-      @impl Homex.Entity
-      def subscriptions do
-        [@command_topic, mode_or(@modes, :brightness, @brightness_command_topic, [])]
-        |> List.flatten()
-      end
-
-      @impl Homex.Entity
-      def platform(), do: @platform
-
-      @impl Homex.Entity
-      def config do
-        %{
-          platform: @platform,
-          state_topic: @state_topic,
-          command_topic: @command_topic,
-          brightness_state_topic: @brightness_state_topic,
-          brightness_command_topic: @brightness_command_topic,
-          name: @name,
-          unique_id: @unique_id
+      def descriptor do
+        %Homex.Descriptor{
+          kind: :light,
+          fields:
+            Map.merge(
+              %{state: :state},
+              if(:brightness in unquote(opts[:modes]), do: %{brightness: :state}, else: %{})
+            ),
+          name: unquote(opts[:name]),
+          options: %{modes: unquote(opts[:modes])},
+          transport: %{mqtt: [retain: unquote(opts[:retain])]}
         }
-        |> Map.reject(fn {_key, val} -> is_nil(val) end)
       end
 
       @impl Homex.Entity
-      def setup_entity(entity) do
-        entity =
-          entity
-          |> Entity.register_handler(:state, fn val ->
-            Homex.publish(@state_topic, val, retain: @retain)
-          end)
-
-        entity =
-          mode_or(
-            @modes,
-            :brightness,
-            Entity.register_handler(entity, :brightness, fn val ->
-              Homex.publish(@brightness_state_topic, val, retain: @retain)
-            end),
-            entity
-          )
-      end
-
-      @impl Homex.Entity
-      def handle_message({@command_topic, @on_payload}, entity) do
+      def handle_command(cmd, entity) do
         entity
-        |> set_on()
-        |> handle_on()
+        |> apply_state(cmd)
+        |> apply_brightness(cmd)
+        |> apply_state_handler(cmd)
+        |> apply_brightness_handler(cmd)
       end
 
-      def handle_message({@command_topic, @off_payload}, entity) do
-        entity
-        |> set_off()
-        |> handle_off()
-      end
+      defp apply_state(entity, %{state: true}), do: set_on(entity)
+      defp apply_state(entity, %{state: false}), do: set_off(entity)
+      defp apply_state(entity, _cmd), do: entity
 
-      def handle_message({@command_topic, _}, entity) do
-        entity
-      end
+      defp apply_brightness(entity, %{brightness: value}) when :brightness in @modes,
+        do: set_brightness(entity, value)
 
-      def handle_message({@brightness_command_topic, brightness}, entity) do
-        with {:ok, value} <- convert_brightness(brightness) do
-          entity
-          |> set_brightness(value)
-          |> handle_brightness(value)
-        else
-          _ -> entity
-        end
-      end
+      defp apply_brightness(entity, _cmd), do: entity
+
+      defp apply_state_handler(entity, %{state: true}), do: handle_on(entity)
+      defp apply_state_handler(entity, %{state: false}), do: handle_off(entity)
+      defp apply_state_handler(entity, _cmd), do: entity
+
+      defp apply_brightness_handler(entity, %{brightness: value}) when :brightness in @modes,
+        do: handle_brightness(entity, value)
+
+      defp apply_brightness_handler(entity, _cmd), do: entity
 
       @impl Homex.Entity.Light
-      def set_on(%Entity{} = entity) do
-        Entity.put_change(entity, :state, @on_payload)
-      end
+      def set_on(%Entity{} = entity), do: Entity.put_change(entity, :state, true)
 
       @impl Homex.Entity.Light
-      def set_off(%Entity{} = entity) do
-        Entity.put_change(entity, :state, @off_payload)
-      end
+      def set_off(%Entity{} = entity), do: Entity.put_change(entity, :state, false)
 
       @impl Homex.Entity.Light
-      def set_brightness(%Entity{} = entity, value) when value >= 0 and value <= 100 do
-        Entity.put_change(entity, :brightness, Float.round(value / 100 * 255, 0))
-      end
+      def set_brightness(%Entity{} = entity, value) when value >= 0 and value <= 100,
+        do: Entity.put_change(entity, :brightness, value)
 
       @impl Homex.Entity.Light
       def handle_on(entity), do: entity
@@ -259,7 +181,11 @@ defmodule Homex.Entity.Light do
       def handle_brightness(entity, _brightness), do: entity
 
       @impl Homex.Entity
-      def handle_init(entity), do: super(entity)
+      def handle_init(entity) do
+        entity = set_off(entity)
+        entity = if :brightness in @modes, do: set_brightness(entity, 0), else: entity
+        super(entity)
+      end
 
       @impl Homex.Entity
       def handle_timer(entity), do: super(entity)

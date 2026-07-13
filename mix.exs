@@ -9,12 +9,16 @@ defmodule Homex.MixProject do
       app: :homex,
       version: @version,
       elixir: "~> 1.15",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: docs(),
       package: package()
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -69,7 +73,7 @@ defmodule Homex.MixProject do
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:emqtt, "~> 1.14.7"},
       {:ex_doc, "~> 0.38", only: :docs},
-      {:jason, "~> 1.4"},
+      {:jason, "~> 1.4", optional: true},
       {:nimble_options, "~> 1.1"}
     ]
   end

@@ -3,10 +3,7 @@
 ```elixir
 Mix.install([
   {:homex, path: __DIR__},
-  ], config: [
-  homex: [
-    entities: [MySwitch, MyTemperature, MyHumidity, MyLight, MyButton]
-  ]
+  {:req, "~> 0.6.2"}
 ])
 ```
 
@@ -31,7 +28,8 @@ defmodule MyTemperature do
   use Homex.Entity.Sensor,
     name: "my-temperature",
     unit_of_measurement: "°C",
-    device_class: "temperature"
+    device_class: "temperature",
+    update_interval: 10_000
 
   def handle_timer(entity) do
     entity |> set_value(Enum.random(-40..40//1))
@@ -42,7 +40,8 @@ defmodule MyHumidity do
   use Homex.Entity.Sensor,
     name: "my-humidiy",
     unit_of_measurement: "%",
-    device_class: "humidity"
+    device_class: "humidity",
+    update_interval: 10_000
 
   def handle_timer(entity) do
     entity |> set_value(Enum.random(20..90//1))
@@ -70,13 +69,28 @@ defmodule MyLight do
     entity
   end
 end
+
+defmodule MyDevice do
+  use Homex.Entity.DeviceTrigger, name: "my-device-trigger"
+end
+
+defmodule MyCamera do
+  use Homex.Entity.Camera, name: "my-camera", update_interval: 5_000
+
+  def handle_timer(entity) do
+    response = Req.get!("https://picsum.photos/200")
+    entity |> set_image(response.body) |> set_attributes(%{foo: "bar"})
+  end
+end
 ```
 
 ```elixir
-Logger.put_application_level(:emqtt, :info)
-Logger.put_application_level(:homex, :info)
+{:ok, pid} =
+  Homex.start_link(
+    entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
+  )
 ```
 
 ```elixir
-{:ok, pid} = Homex.start_link()
+Homex.Entity.DeviceTrigger.trigger("my-device-trigger")
 ```

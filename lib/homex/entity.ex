@@ -4,34 +4,15 @@ defmodule Homex.Entity do
   """
   use GenServer
 
-  @doc "The given name of the entity"
-  @callback name() :: String.t()
-
-  @doc "The unique id of the entity"
-  @callback unique_id() :: String.t()
-
-  @doc "The list of topics to subscribe to"
-  @callback subscriptions() :: [String.t()]
-
-  @doc "The Home Assistant component config definition"
-  @callback config() :: map()
-
-  @doc "The Home Assistant platform"
-  @callback platform() :: String.t()
-
-  @doc false
-  @callback setup_entity(t()) :: t()
+  @doc "The Home Assistant entity descriptor"
+  @callback descriptor() :: Homex.Descriptor.t()
 
   @doc """
   Configures the intial state for the switch
   """
   @callback handle_init(entity :: t()) :: entity :: t()
 
-  @doc """
-  Handle a new message from the subscriptions
-  """
-  @callback handle_message({topic :: String.t(), payload :: term()}, entity :: t()) ::
-              entity :: t()
+  @callback handle_command(cmd :: map(), entity :: t()) :: entity :: t()
 
   @doc """
   If an `update_interval` is set, this callback will be fired
@@ -39,22 +20,22 @@ defmodule Homex.Entity do
   @callback handle_timer(entity :: Entity.t()) :: entity :: t()
 
   @type t() :: %__MODULE__{
-          name: atom(),
-          keys: MapSet.t(),
+          name: term(),
+          impl: module(),
           values: map(),
-          handlers: map(),
           changes: map(),
           private: map(),
-          impl: Module.t()
+          descriptor: Homex.Descriptor.t()
         }
 
-  defstruct name: nil,
-            values: %{},
-            changes: %{},
-            handlers: %{},
-            keys: MapSet.new(),
-            private: %{},
-            impl: nil
+  defstruct [
+    :name,
+    :impl,
+    :descriptor,
+    values: %{},
+    changes: %{},
+    private: %{}
+  ]
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts], generated: true do
@@ -67,23 +48,32 @@ defmodule Homex.Entity do
       def update_interval, do: @update_interval
 
       @impl Homex.Entity
-      def setup_entity(entity), do: entity
-
-      @impl Homex.Entity
       def handle_init(entity), do: entity
 
       @impl Homex.Entity
-      def handle_message({_topic, _payload}, entity), do: entity
+      def handle_command(_cmd, entity), do: entity
 
       @impl Homex.Entity
       def handle_timer(entity), do: entity
 
-      defoverridable setup_entity: 1, handle_init: 1, handle_timer: 1, handle_message: 2
+      defoverridable handle_init: 1, handle_timer: 1, handle_command: 2
     end
   end
 
-  def start_link(entity), do: GenServer.start_link(__MODULE__, entity, name: entity.name)
+  def via(name), do: {:via, Registry, {Homex.EntityRegistry, name}}
+  def via(name, meta), do: {:via, Registry, {Homex.EntityRegistry, name, meta}}
 
+  def child_spec(%__MODULE__{} = entity) do
+    %{
+      id: {__MODULE__, entity.name},
+      start: {__MODULE__, :start_link, [entity]},
+      restart: :transient
+    }
+  end
+
+  def start_link(%__MODULE__{} = entity), do: GenServer.start_link(__MODULE__, entity)
+
+  # TODO: go over this, if this function is still needed
   @doc false
   @spec new(module() | Keyword.t()) :: t() | nil
   def new(module) when is_atom(module), do: new(name: module, impl: module)
@@ -96,6 +86,7 @@ defmodule Homex.Entity do
     end
   end
 
+  # TODO: go over this, if this function is still needed
   def valid?(%__MODULE__{}), do: true
 
   def valid?(module) when is_atom(module), do: implements_behaviour?(module)
@@ -107,27 +98,21 @@ defmodule Homex.Entity do
 
   def valid?(_), do: false
 
-  @doc false
-  @spec register_handler(t(), atom(), fun(), term()) :: t()
-  def register_handler(
-        %__MODULE__{keys: keys, values: values, handlers: handlers} = entity,
-        key,
-        handler_fn,
-        initial_value \\ nil
-      )
-      when is_atom(key) and is_function(handler_fn) do
-    values = Map.put(values, key, initial_value)
-    handlers = Map.put(handlers, key, handler_fn)
-    keys = MapSet.put(keys, key)
+  def snapshot(name), do: Homex.call(name, {:homex, :snapshot})
 
-    %{entity | keys: keys, values: values, handlers: handlers}
+  def send_command(name, cmd) do
+    Homex.notify(name, {:homex, :command, cmd})
   end
 
   @doc false
   @spec put_change(t(), atom(), term()) :: t()
-  def put_change(%__MODULE__{keys: keys, changes: changes} = entity, key, value)
+  def put_change(
+        %__MODULE__{changes: changes, descriptor: %Homex.Descriptor{fields: fields}} = entity,
+        key,
+        value
+      )
       when is_atom(key) do
-    if key in keys do
+    if Map.has_key?(fields, key) do
       changes = Map.put(changes, key, value)
       %{entity | changes: changes}
     else
@@ -138,22 +123,24 @@ defmodule Homex.Entity do
   @doc false
   @spec execute_change(t()) :: t()
   def execute_change(
-        %__MODULE__{keys: keys, values: values, changes: changes, handlers: handlers} = entity
+        %__MODULE__{
+          values: values,
+          changes: changes,
+          descriptor: %Homex.Descriptor{fields: fields}
+        } = entity
       ) do
-    values =
-      for key <- keys, into: %{} do
-        value = Map.get(values, key)
-        change = Map.get(changes, key, value)
-        handler = Map.get(handlers, key)
-
-        if value != change do
-          handler.(change)
-        end
-
-        {key, change}
+    diff =
+      for {key, value} <- changes, fields[key] == :event or values[key] != value, into: %{} do
+        {key, value}
       end
 
-    %{entity | changes: %{}, values: values}
+    if map_size(diff) != 0 do
+      for {module, instance} <- Homex.adapters() do
+        module.publish_state(instance, entity.descriptor, diff)
+      end
+    end
+
+    %{entity | changes: %{}, values: Map.merge(values, diff)}
   end
 
   @doc """
@@ -183,26 +170,36 @@ defmodule Homex.Entity do
   end
 
   @impl GenServer
-  def init(%__MODULE__{} = entity) do
-    case entity.impl.update_interval() do
+  def init(%__MODULE__{impl: impl} = entity) do
+    case impl.update_interval() do
       :never -> :ok
-      time -> :timer.send_interval(time, :update)
+      time -> :timer.send_interval(time, {:homex, :timer})
     end
 
-    {:ok, entity |> entity.impl.setup_entity() |> entity.impl.handle_init() |> execute_change(),
-     {:continue, :register}}
+    descriptor =
+      impl.descriptor()
+      |> Homex.Descriptor.put_instance_name(entity.name)
+      |> Homex.Descriptor.put_unique_id(Homex.device())
+
+    with {:ok, _pid} <-
+           Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do
+      values = Map.new(descriptor.fields, fn {key, _kind} -> {key, nil} end)
+      entity = %{entity | descriptor: descriptor, values: values}
+      {:ok, entity |> impl.handle_init() |> execute_change()}
+    end
   end
 
   @impl GenServer
-  def handle_call(:impl, _, entity) do
-    {:reply, entity.impl, entity}
+  def handle_call({:homex, :snapshot}, _from, entity) do
+    {:reply, entity.values, entity}
   end
 
-  def handle_call(:state, _, entity) do
-    {:reply, entity, entity}
+  # unregistering here is synchronous, unlike the registry cleanup after death
+  def handle_call({:homex, :remove}, _from, entity) do
+    Registry.unregister(Homex.EntityRegistry, entity.descriptor.name)
+    {:stop, :normal, :ok, entity}
   end
 
-  # Fallback, passes the called msg along to the implementation for handling
   def handle_call(msg, _from, %{impl: impl} = entity) do
     if function_exported?(impl, :handle_call, 2) do
       {reply, entity} = impl.handle_call(msg, entity)
@@ -213,8 +210,6 @@ defmodule Homex.Entity do
   end
 
   @impl GenServer
-  # Fallback, passes the casted msg along to the implementation for handling and
-  # calling execute_change after.
   def handle_cast(msg, %{impl: impl} = entity) do
     if function_exported?(impl, :handle_cast, 2) do
       entity = impl.handle_cast(msg, entity) |> execute_change()
@@ -225,14 +220,13 @@ defmodule Homex.Entity do
   end
 
   @impl GenServer
-  def handle_info(:update, %{impl: impl} = entity) do
+  def handle_info({:homex, :timer}, %{impl: impl} = entity) do
     entity = entity |> impl.handle_timer() |> execute_change()
     {:noreply, entity}
   end
 
-  # Subscription messages dispatched by the Manager arrive as {topic, payload}
-  def handle_info({topic, _payload} = msg, %{impl: impl} = entity) when is_binary(topic) do
-    entity = impl.handle_message(msg, entity) |> execute_change()
+  def handle_info({:homex, :command, cmd}, %{impl: impl} = entity) do
+    entity = impl.handle_command(cmd, entity) |> execute_change()
     {:noreply, entity}
   end
 
@@ -244,23 +238,5 @@ defmodule Homex.Entity do
     else
       {:noreply, entity}
     end
-  end
-
-  @impl GenServer
-  def terminate(_reason, entity) do
-    for topic <- entity.impl.subscriptions() do
-      Registry.unregister(Homex.SubscriptionRegistry, topic)
-    end
-  end
-
-  @impl GenServer
-  def handle_continue(:register, entity) do
-    Process.flag(:trap_exit, true)
-
-    for topic <- entity.impl.subscriptions() do
-      Registry.register(Homex.SubscriptionRegistry, topic, nil)
-    end
-
-    {:noreply, entity}
   end
 end

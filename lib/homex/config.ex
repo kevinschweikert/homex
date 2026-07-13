@@ -93,9 +93,6 @@ defmodule Homex.Config do
   defstruct [:device, :origin, :discovery_prefix, :entities, :broker]
 
   @doc false
-  def get, do: Application.get_all_env(:homex) |> new()
-
-  @doc false
   @spec new(Keyword.t()) :: t()
   def new(opts) do
     config = opts |> NimbleOptions.validate!(@config_schema)
