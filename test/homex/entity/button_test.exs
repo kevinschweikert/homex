@@ -12,7 +12,8 @@ defmodule Homex.Entity.ButtonTest do
 
   setup do
     Process.register(self(), :button_test)
-    start_supervised!({Entity, Entity.new(TestButton)})
+    {:ok, entity} = Entity.new(TestButton)
+    start_supervised!({Entity, entity})
     :ok
   end
 
@@ -37,5 +38,32 @@ defmodule Homex.Entity.ButtonTest do
   test "unknown commands are ignored" do
     Entity.send_command("test-button", %{state: true})
     refute_receive :pressed
+  end
+
+  describe "handle_command/2" do
+    alias Homex.Entity.Button
+
+    defmodule Recorder do
+      use Homex.Entity.Button, name: "fn-button"
+
+      @impl Homex.Entity.Button
+      def handle_press(entity), do: Entity.put_private(entity, :pressed?, true)
+    end
+
+    defmodule SimpleButton do
+      use Homex.Entity.Button, name: "simple-button"
+    end
+
+    test "dispatches a press to the entity module" do
+      {:ok, entity} = Entity.new(Recorder)
+      entity = Button.handle_command(%{pressed: true}, entity)
+
+      assert Entity.get_private(entity, :pressed?)
+    end
+
+    test "leaves the entity untouched without user callbacks" do
+      {:ok, entity} = SimpleButton.new(name: "fn-button")
+      assert Button.handle_command(%{pressed: true}, entity) == entity
+    end
   end
 end

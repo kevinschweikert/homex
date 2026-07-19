@@ -3,14 +3,15 @@ defmodule Camera do
   A Homex.Entity for a webcam
   """
 
-  use Homex.Entity.Camera, name: "my-camera", image_encoding: "b64", update_interval: 1_000
+  use Homex.Entity.Camera, name: "my-camera", image_encoding: "b64"
 
   def handle_init(entity) do
+    :timer.send_interval(1_000, :snap)
     r = Xav.Reader.new!("C922 Pro Stream Webcam", device?: true)
     entity |> put_private(:reader, r)
   end
 
-  def handle_timer(entity) do
+  def handle_info(:snap, entity) do
     r = entity |> get_private(:reader)
     {:ok, %Xav.Frame{} = frame} = Xav.Reader.next_frame(r)
 

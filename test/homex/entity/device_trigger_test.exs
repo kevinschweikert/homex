@@ -6,7 +6,8 @@ defmodule Homex.Entity.DeviceTriggerTest do
   end
 
   setup do
-    start_supervised!({Entity, Entity.new(TestTrigger)})
+    {:ok, entity} = Entity.new(TestTrigger)
+    start_supervised!({Entity, entity})
     :ok
   end
 
@@ -21,5 +22,27 @@ defmodule Homex.Entity.DeviceTriggerTest do
 
     Homex.Entity.DeviceTrigger.trigger("test-trigger")
     assert_receive {:publish_state, _, %{trigger: true}}
+  end
+
+  test "runs bare, without a use-based module" do
+    {:ok, entity} = Entity.new({Homex.Entity.DeviceTrigger, name: "bare-trigger"})
+    start_supervised!({Entity, entity}, id: :bare)
+
+    Homex.Entity.DeviceTrigger.trigger("bare-trigger")
+    assert_receive {:publish_state, %Descriptor{kind: :device_trigger}, %{trigger: true}}
+  end
+
+  describe "handle_command/2" do
+    alias Homex.Entity.DeviceTrigger
+
+    test "records the trigger event" do
+      {:ok, entity} = DeviceTrigger.new(name: "fn-trigger")
+      assert DeviceTrigger.handle_command(%{trigger: true}, entity).changes == %{trigger: true}
+    end
+
+    test "ignores other commands" do
+      {:ok, entity} = DeviceTrigger.new(name: "fn-trigger")
+      assert DeviceTrigger.handle_command(%{state: true}, entity) == entity
+    end
   end
 end

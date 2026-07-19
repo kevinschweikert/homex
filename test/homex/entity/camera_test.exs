@@ -9,7 +9,8 @@ defmodule Homex.Entity.CameraTest do
   end
 
   setup do
-    start_supervised!({Entity, Entity.new(TestCamera)})
+    {:ok, entity} = Entity.new(TestCamera)
+    start_supervised!({Entity, entity})
     :ok
   end
 
@@ -24,5 +25,16 @@ defmodule Homex.Entity.CameraTest do
 
     Homex.notify("test-camera", {:attrs, %{motion: true}})
     assert_receive {:publish_state, _, %{attrs: %{motion: true}}}
+  end
+
+  describe "set_image/2 and set_attributes/2" do
+    alias Homex.Entity.Camera
+
+    test "record independent changes" do
+      {:ok, entity} = Camera.new(name: "fn-camera")
+      entity = entity |> Camera.set_image(<<1>>) |> Camera.set_attributes(%{motion: true})
+
+      assert entity.changes == %{image: <<1>>, attrs: %{motion: true}}
+    end
   end
 end

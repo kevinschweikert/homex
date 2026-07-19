@@ -1,32 +1,38 @@
 defmodule Homex.Entity.LightTest do
   use Homex.EntityCase, async: true
 
+  alias Homex.Entity.Light
+
   defmodule TestLight do
     use Homex.Entity.Light, name: "test-light", modes: [:brightness]
 
+    @impl Homex.Entity.Light
     def handle_on(entity) do
       send(:light_test, {:handle_on, entity.changes})
       entity
     end
 
+    @impl Homex.Entity.Light
     def handle_off(entity) do
       send(:light_test, {:handle_off, entity.changes})
       entity
     end
 
+    @impl Homex.Entity.Light
     def handle_brightness(entity, value) do
       send(:light_test, {:handle_brightness, value, entity.changes})
       entity
     end
   end
 
-  defmodule OnOffLight do
-    use Homex.Entity.Light, name: "onoff-light"
+  defmodule SimpleLight do
+    use Homex.Entity.Light, name: "simple-light"
   end
 
   setup do
     Process.register(self(), :light_test)
-    start_supervised!({Entity, Entity.new(TestLight)})
+    {:ok, entity} = Entity.new(TestLight)
+    start_supervised!({Entity, entity})
     assert_receive {:publish_state, _, %{state: false, brightness: 0}}
     :ok
   end
@@ -49,8 +55,9 @@ defmodule Homex.Entity.LightTest do
     assert_receive {:publish_state, _, %{state: true, brightness: 50}}
     compound_snapshot = Entity.snapshot("test-light")
 
-    stop_supervised!({Entity, TestLight})
-    start_supervised!({Entity, Entity.new(TestLight)})
+    stop_supervised!({Entity, "test-light"})
+    {:ok, entity} = Entity.new(TestLight)
+    start_supervised!({Entity, entity})
 
     Entity.send_command("test-light", %{state: true})
     Entity.send_command("test-light", %{brightness: 50})
@@ -59,10 +66,48 @@ defmodule Homex.Entity.LightTest do
   end
 
   test "brightness is ignored when the mode is not enabled" do
-    start_supervised!({Entity, Entity.new(OnOffLight)})
+    {:ok, entity} = SimpleLight.new(name: "onoff-light")
+    start_supervised!({Entity, entity})
     assert_receive {:publish_state, _, %{state: false}}
     Entity.send_command("onoff-light", %{brightness: 50})
     refute_receive {:publish_state, _, _}
+  end
+
+  describe "setup/1" do
+    test "defaults to off with zero brightness when the mode is enabled" do
+      {:ok, entity} = SimpleLight.new(name: "fn-light", modes: [:brightness])
+      assert Light.setup(entity).changes == %{state: false, brightness: 0}
+    end
+
+    test "defaults to off only when brightness is not enabled" do
+      {:ok, entity} = SimpleLight.new(name: "fn-light")
+      assert Light.setup(entity).changes == %{state: false}
+    end
+  end
+
+  describe "handle_command/2" do
+    test "records state and brightness from a compound command" do
+      {:ok, entity} = SimpleLight.new(name: "fn-light", modes: [:brightness])
+      entity = Light.handle_command(%{state: true, brightness: 50}, entity)
+
+      assert entity.changes == %{state: true, brightness: 50}
+    end
+
+    test "drops brightness when the mode is not enabled" do
+      {:ok, entity} = SimpleLight.new(name: "fn-light")
+      entity = Light.handle_command(%{state: true, brightness: 50}, entity)
+
+      assert entity.changes == %{state: true}
+    end
+  end
+
+  describe "set_brightness/2" do
+    test "rejects out-of-range values" do
+      {:ok, entity} = Light.new(name: "fn-light", modes: [:brightness])
+
+      assert_raise FunctionClauseError, fn -> Light.set_brightness(entity, 101) end
+      assert_raise FunctionClauseError, fn -> Light.set_brightness(entity, -1) end
+    end
   end
 
   describe "MQTT normalize" do

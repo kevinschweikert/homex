@@ -1,20 +1,15 @@
 defmodule Homex.Entity.Switch do
-  @opts_schema [
-                 name: [required: true, type: :string, doc: "the name of the entity"],
-                 update_interval: [
-                   required: false,
-                   type: {:or, [:atom, :integer]},
-                   default: :never,
-                   doc:
-                     "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
-                 ],
+  use Homex.Entity
+
+  @opts_schema Homex.Entity.base_opts_schema()
+               |> Keyword.merge(
                  retain: [
                    required: false,
                    type: :boolean,
                    default: true,
                    doc: "if the last state should be retained"
                  ]
-               ]
+               )
                |> NimbleOptions.new!()
 
   @moduledoc """
@@ -27,20 +22,6 @@ defmodule Homex.Entity.Switch do
   ## Options
 
   #{NimbleOptions.docs(@opts_schema)}
-
-  ## Overridable Functions
-
-  The following functions can be overridden in your entity:
-
-  * `handle_init/1` - From `Homex.Entity`
-  * `handle_timer/1` - From `Homex.Entity`
-  * `handle_on/1` - From `Homex.Entity.Switch`
-  * `handle_off/1` - From `Homex.Entity.Switch`
-
-  ### Default Implementations
-
-  All overridable functions have safe default implementations that return the entity unchanged.
-  You only need to override the functions you want to customize.
 
   ## Example
 
@@ -64,76 +45,61 @@ defmodule Homex.Entity.Switch do
   alias Homex.Entity
 
   @doc """
+  Gets called when the switch receives an on command
+  """
+  @callback handle_on(entity :: Entity.t()) :: entity :: Entity.t()
+
+  @doc """
+  Gets called when the switch receives an off command
+  """
+  @callback handle_off(entity :: Entity.t()) :: entity :: Entity.t()
+
+  @optional_callbacks handle_on: 1, handle_off: 1
+
+  defmacro __using__(opts) do
+    quote do
+      unquote(Homex.Entity.__entity__(__MODULE__, opts, set_on: 1, set_off: 1))
+
+      def handle_on(entity), do: entity
+      def handle_off(entity), do: entity
+      defoverridable handle_on: 1, handle_off: 1
+    end
+  end
+
+  @impl Homex.Entity
+  def new(opts) do
+    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
+      {:ok,
+       %Entity{
+         name: opts[:name],
+         module: __MODULE__,
+         descriptor: %Homex.Descriptor{
+           kind: :switch,
+           fields: %{state: :state},
+           name: opts[:name],
+           transport: %{mqtt: [retain: opts[:retain]]}
+         }
+       }}
+    end
+  end
+
+  @impl Homex.Entity
+  def setup(%{module: m} = entity), do: m.handle_init(set_off(entity))
+
+  @impl Homex.Entity
+  def handle_command(%{state: true}, %{module: m} = entity), do: m.handle_on(set_on(entity))
+  def handle_command(%{state: false}, %{module: m} = entity), do: m.handle_off(set_off(entity))
+  def handle_command(_cmd, entity), do: entity
+
+  @doc """
   Sets the switch state to on
   """
-  @callback set_on(entity :: Entity.t()) :: entity :: Entity.t()
+  @spec set_on(Entity.t()) :: Entity.t()
+  def set_on(%Entity{} = entity), do: Entity.put_change(entity, :state, true)
+
   @doc """
   Sets the switch state to off
   """
-  @callback set_off(entity :: Entity.t()) :: entity :: Entity.t()
-
-  @doc """
-  Gets called when the command topic receieves an `on_payload`
-  """
-  @callback handle_on(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
-
-  @doc """
-  Gets called when the command topic receieves an `off_payload`
-  """
-  @callback handle_off(entity :: Entity.t()) :: entity :: Entity.t() | {:error, reason :: term()}
-
-  defmacro __using__(opts) do
-    opts = NimbleOptions.validate!(opts, @opts_schema)
-
-    quote bind_quoted: [opts: opts], generated: true do
-      use Homex.Entity, update_interval: opts[:update_interval]
-
-      @behaviour Homex.Entity.Switch
-
-      @impl Homex.Entity
-      def descriptor do
-        %Homex.Descriptor{
-          kind: :switch,
-          fields: %{state: :state},
-          name: unquote(opts[:name]),
-          transport: %{mqtt: [retain: unquote(opts[:retain])]}
-        }
-      end
-
-      @impl Homex.Entity
-      def handle_command(%{state: true}, entity) do
-        entity |> set_on() |> handle_on()
-      end
-
-      def handle_command(%{state: false}, entity) do
-        entity |> set_off() |> handle_off()
-      end
-
-      def handle_command(_cmd, entity), do: entity
-
-      @impl Homex.Entity.Switch
-      def set_on(%Entity{} = entity) do
-        Entity.put_change(entity, :state, true)
-      end
-
-      @impl Homex.Entity.Switch
-      def set_off(%Entity{} = entity) do
-        Entity.put_change(entity, :state, false)
-      end
-
-      @impl Homex.Entity.Switch
-      def handle_on(entity), do: entity
-
-      @impl Homex.Entity.Switch
-      def handle_off(entity), do: entity
-
-      @impl Homex.Entity
-      def handle_init(entity), do: entity |> set_off() |> super()
-
-      @impl Homex.Entity
-      def handle_timer(entity), do: super(entity)
-
-      defoverridable handle_init: 1, handle_on: 1, handle_off: 1, handle_timer: 1
-    end
-  end
+  @spec set_off(Entity.t()) :: Entity.t()
+  def set_off(%Entity{} = entity), do: Entity.put_change(entity, :state, false)
 end

@@ -1,6 +1,8 @@
 defmodule Homex.Entity.Button do
-  @opts_schema [
-                 name: [required: true, type: :string, doc: "the name of the entity"],
+  use Homex.Entity
+
+  @opts_schema Homex.Entity.base_opts_schema()
+               |> Keyword.merge(
                  enabled_by_default: [
                    required: false,
                    type: :boolean,
@@ -20,7 +22,7 @@ defmodule Homex.Entity.Button do
                    default: false,
                    doc: "if the last state should be retained"
                  ]
-               ]
+               )
                |> NimbleOptions.new!()
 
   @moduledoc """
@@ -51,52 +53,54 @@ defmodule Homex.Entity.Button do
   alias Homex.Entity
 
   @doc """
-  get's called when the button is pressed in Home Assistant 
+  Gets called when the button is pressed in Home Assistant
   """
   @callback handle_press(entity :: Entity.t()) :: entity :: Entity.t()
 
-  @doc """
-  sets the buttons attributes
-  """
-  @callback set_attributes(entity :: Entity.t(), attributes :: Map.t()) :: entity :: Entity.t()
+  @optional_callbacks handle_press: 1
 
   defmacro __using__(opts) do
-    opts = NimbleOptions.validate!(opts, @opts_schema)
+    quote do
+      unquote(Homex.Entity.__entity__(__MODULE__, opts, set_attributes: 2))
 
-    quote bind_quoted: [opts: opts], generated: true do
-      use Homex.Entity
-
-      @behaviour Homex.Entity.Button
-
-      @impl Homex.Entity
-      def descriptor do
-        %Homex.Descriptor{
-          kind: :button,
-          fields: %{pressed: :event, attrs: :state},
-          name: unquote(opts[:name]),
-          options: %{device_class: unquote(opts[:device_class])},
-          transport: %{mqtt: [retain: unquote(opts[:retain])]}
-        }
-      end
-
-      def handle_command(%{pressed: true}, entity) do
-        entity |> handle_press()
-      end
-
-      def handle_command(_cmd, entity), do: entity
-
-      @impl Homex.Entity.Button
       def handle_press(entity), do: entity
-
-      @impl Homex.Entity.Button
-      def set_attributes(%Entity{} = entity, attrs) when is_map(attrs) do
-        Entity.put_change(entity, :attrs, attrs)
-      end
-
-      @impl Homex.Entity
-      def handle_init(entity), do: super(entity)
-
-      defoverridable handle_init: 1, handle_press: 1
+      defoverridable handle_press: 1
     end
+  end
+
+  @impl Homex.Entity
+  def new(opts) do
+    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
+      {:ok,
+       %Entity{
+         name: opts[:name],
+         module: __MODULE__,
+         descriptor: %Homex.Descriptor{
+           kind: :button,
+           fields: %{pressed: :event, attrs: :state},
+           name: opts[:name],
+           options: %{
+             device_class: opts[:device_class],
+             enabled_by_default: opts[:enabled_by_default]
+           },
+           transport: %{mqtt: [retain: opts[:retain]]}
+         }
+       }}
+    end
+  end
+
+  @impl Homex.Entity
+  def setup(%{module: m} = entity), do: m.handle_init(entity)
+
+  @impl Homex.Entity
+  def handle_command(%{pressed: true}, %{module: m} = entity), do: m.handle_press(entity)
+  def handle_command(_cmd, entity), do: entity
+
+  @doc """
+  Sets the buttons attributes
+  """
+  @spec set_attributes(Entity.t(), map()) :: Entity.t()
+  def set_attributes(%Entity{} = entity, attrs) when is_map(attrs) do
+    Entity.put_change(entity, :attrs, attrs)
   end
 end

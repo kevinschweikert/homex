@@ -1,6 +1,8 @@
 defmodule Homex.Entity.DeviceTrigger do
-  @opts_schema [
-                 name: [required: true, type: :string, doc: "the name of the entity"],
+  use Homex.Entity
+
+  @opts_schema Homex.Entity.base_opts_schema()
+               |> Keyword.merge(
                  enabled_by_default: [
                    required: false,
                    type: :boolean,
@@ -25,7 +27,7 @@ defmodule Homex.Entity.DeviceTrigger do
                    default: "button_1",
                    doc: "The subtype of the trigger, e.g. button_1."
                  ]
-               ]
+               )
                |> NimbleOptions.new!()
 
   @moduledoc """
@@ -47,47 +49,72 @@ defmodule Homex.Entity.DeviceTrigger do
   end
   ```
 
-  Trigger using the trigger/0 function
+  Fire the trigger from your code:
 
   ```elixir
-  iex> MyDevice.trigger()
+  iex> Homex.Entity.DeviceTrigger.trigger("my-device")
   :ok
   ```
+
+  ## Running without a module
+
+  A device trigger has no custom callbacks to implement, so unlike the other
+  kinds it is meant to be run bare — pass the kind module directly to Homex
+  instead of defining your own module:
+
+  ```elixir
+  {Homex.Entity.DeviceTrigger, name: "my-device"}
+  ```
+
+  Run bare like this and the OTP handler callbacks (`handle_init`,
+  `handle_info`, `handle_call`, `handle_cast`) fall back to no-op defaults. If
+  you need to react to those messages, `use Homex.Entity.DeviceTrigger` in your
+  own module and override them there.
   """
 
   alias Homex.Entity
 
-  @doc "fires a trigger to the entity"
-  def trigger(name), do: Homex.notify(name, :device_trigger_fire)
+  defmacro __using__(opts), do: Homex.Entity.__entity__(__MODULE__, opts)
 
-  defmacro __using__(opts) do
-    opts = NimbleOptions.validate!(opts, @opts_schema)
+  @doc "Fires the trigger"
+  def trigger(name), do: Entity.send_command(name, %{trigger: true})
 
-    quote bind_quoted: [opts: opts], generated: true do
-      use Homex.Entity
+  # DeviceTrigger is meant to run bare, so it opts into being a runnable entity
+  # and carries the handler defaults itself instead of getting them from `use`.
+  @doc false
+  def __homex_entity__, do: true
 
-      @impl Homex.Entity
-      def descriptor do
-        %Homex.Descriptor{
-          kind: :device_trigger,
-          fields: %{trigger: :event},
-          name: unquote(opts[:name]),
-          options: %{
-            type: unquote(opts[:type]),
-            subtype: unquote(opts[:subtype]),
-            payload: unquote(opts[:payload]),
-            enabled_by_default: unquote(opts[:enabled_by_default])
-          }
-        }
-      end
+  def handle_init(entity), do: entity
+  def handle_info(_msg, entity), do: entity
+  def handle_call(_msg, entity), do: {{:error, :not_handled}, entity}
+  def handle_cast(_msg, entity), do: entity
 
-      def handle_info(:device_trigger_fire, entity), do: Entity.put_change(entity, :trigger, true)
-      def handle_info(_, entity), do: entity
-
-      @impl Homex.Entity
-      def handle_init(entity), do: super(entity)
-
-      defoverridable handle_init: 1
+  @impl Homex.Entity
+  def new(opts) do
+    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
+      {:ok,
+       %Entity{
+         name: opts[:name],
+         module: __MODULE__,
+         descriptor: %Homex.Descriptor{
+           kind: :device_trigger,
+           fields: %{trigger: :event},
+           name: opts[:name],
+           options: %{
+             type: opts[:type],
+             subtype: opts[:subtype],
+             payload: opts[:payload],
+             enabled_by_default: opts[:enabled_by_default]
+           }
+         }
+       }}
     end
   end
+
+  @impl Homex.Entity
+  def setup(%{module: m} = entity), do: m.handle_init(entity)
+
+  @impl Homex.Entity
+  def handle_command(%{trigger: true}, entity), do: Entity.put_change(entity, :trigger, true)
+  def handle_command(_cmd, entity), do: entity
 end

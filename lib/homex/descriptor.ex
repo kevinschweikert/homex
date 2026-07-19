@@ -6,8 +6,8 @@ defmodule Homex.Descriptor do
           name: String.t(),
           device: atom(),
           unique_id: String.t() | nil,
-          options: Map.t(),
-          transport: Map.t()
+          options: map(),
+          transport: map()
         }
 
   defstruct [
@@ -19,17 +19,6 @@ defmodule Homex.Descriptor do
     :options,
     :transport
   ]
-
-  @doc """
-  Overrides the impl's baked-in name with an explicit instance name, so several
-  instances of one impl can run side by side. The default name (the impl module
-  itself) keeps the descriptor untouched.
-  """
-  @spec put_instance_name(t(), term()) :: t()
-  def put_instance_name(%__MODULE__{} = descriptor, name) when is_binary(name),
-    do: %{descriptor | name: name}
-
-  def put_instance_name(%__MODULE__{} = descriptor, _module_default), do: descriptor
 
   @doc """
   Derives the entity's stable identity and stores it on the descriptor.
