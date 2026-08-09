@@ -6,7 +6,7 @@ defmodule Homex.EntityTest do
   end
 
   defp entity(fields) do
-    %Entity{name: :test, descriptor: %Descriptor{kind: :switch, fields: fields}}
+    %Entity{descriptor: %Descriptor{kind: :switch, name: :test, fields: fields}}
   end
 
   describe "put_change/3" do
@@ -62,20 +62,22 @@ defmodule Homex.EntityTest do
     test "accepts a bare module with opts baked in at use time" do
       assert {:ok,
               %Entity{
-                name: "entity-test-switch",
                 module: TestSwitch,
                 descriptor: %Descriptor{kind: :switch, name: "entity-test-switch"}
               }} = Entity.new(TestSwitch)
     end
 
     test "accepts a {module, opts} pair overriding baked-in opts" do
-      assert {:ok, %Entity{name: "other-name", module: TestSwitch}} =
+      assert {:ok, %Entity{module: TestSwitch, descriptor: %Descriptor{name: "other-name"}}} =
                Entity.new({TestSwitch, name: "other-name"})
     end
 
     test "accepts a kind module directly, without a use-based module" do
-      assert {:ok, %Entity{name: "plain", module: Homex.Entity.DeviceTrigger}} =
-               Entity.new({Homex.Entity.DeviceTrigger, name: "plain"})
+      assert {:ok,
+              %Entity{
+                module: Homex.Entity.DeviceTrigger,
+                descriptor: %Descriptor{name: "plain"}
+              }} = Entity.new({Homex.Entity.DeviceTrigger, name: "plain"})
     end
 
     test "returns an error tuple on invalid options" do
