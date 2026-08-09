@@ -23,18 +23,13 @@ defmodule Homex.Descriptor do
   @doc """
   Derives the entity's stable identity and stores it on the descriptor.
 
-  Only identity-bearing fields go into the hash: the root device identity plus
-  the descriptor's device ref, kind and name. Everything else (options,
-  transport, fields) can change between releases without re-identifying the
-  entity in Home Assistant.
+  Only the node id and the entity name go in — they are already unique together,
+  since entity names are unique within a node. The device ref is deliberately
+  left out so moving an entity between devices keeps its identity in Home
+  Assistant instead of re-creating it.
   """
-  @spec put_unique_id(t(), device :: map()) :: t()
-  def put_unique_id(%__MODULE__{} = descriptor, device) do
-    unique_id =
-      {device[:identifiers], device[:name], descriptor.device, descriptor.kind, descriptor.name}
-      |> :erlang.phash2(2 ** 32)
-      |> to_string()
-
-    %{descriptor | unique_id: unique_id}
+  @spec put_unique_id(t(), String.t()) :: t()
+  def put_unique_id(%__MODULE__{name: name} = descriptor, node_id) do
+    %{descriptor | unique_id: "#{node_id}-#{Homex.slug(name)}"}
   end
 end

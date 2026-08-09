@@ -20,13 +20,17 @@ defmodule Homex.Adapter.MQTT do
     :emqtt_opts,
     :emqtt_ref,
     :discovery_prefix,
+    :node_id,
     connected: false,
     subscriptions: %{},
     devices: %{}
   ]
 
   defmodule DeviceState do
-    defstruct components: %{}, subscriptions: %{}
+    @moduledoc false
+    # `topic` is remembered because a device that got removed can no longer be
+    # resolved into the identifier its discovery topic is built from.
+    defstruct components: %{}, subscriptions: %{}, topic: nil
   end
 
   def start_link(%Homex.Config{} = config) do
@@ -89,16 +93,14 @@ defmodule Homex.Adapter.MQTT do
 
   @impl GenServer
   def init(config) do
-    emqtt_opts = config.broker
-    discovery_prefix = config.discovery_prefix
-
     Logger.put_application_level(:emqtt, :info)
     Process.flag(:trap_exit, true)
 
     {:ok,
      %__MODULE__{
-       emqtt_opts: emqtt_opts,
-       discovery_prefix: discovery_prefix
+       emqtt_opts: config.broker,
+       discovery_prefix: config.discovery_prefix,
+       node_id: Homex.slug(config.node_id)
      }, {:continue, :connect}}
   end
 
@@ -127,14 +129,38 @@ defmodule Homex.Adapter.MQTT do
         %__MODULE__{
           emqtt_pid: emqtt_pid,
           discovery_prefix: discovery_prefix,
+          node_id: node_id,
           devices: old_devices
         } = state
       ) do
     groups = Homex.descriptors() |> Enum.group_by(& &1.device)
-    device_ids = Map.merge(old_devices, groups) |> Map.keys()
+    known_devices = Homex.devices()
+
+    {resolved, unresolved} =
+      Map.merge(old_devices, groups)
+      |> Map.keys()
+      |> Enum.map(&{&1, Map.get(known_devices, &1)})
+      |> Enum.split_with(fn {_id, device} -> device end)
+
+    for {device_id, nil} <- unresolved do
+      Logger.warning(
+        "device #{inspect(device_id)} is not registered, not publishing its entities"
+      )
+
+      old_state = Map.get(old_devices, device_id, %DeviceState{})
+
+      for topic <- Map.keys(old_state.subscriptions) do
+        :emqtt.unsubscribe(emqtt_pid, topic)
+      end
+
+      # clearing the retained discovery config makes Home Assistant drop the device
+      if old_state.topic do
+        :emqtt.publish(emqtt_pid, old_state.topic, "", retain: true)
+      end
+    end
 
     devices =
-      Enum.reduce(device_ids, %{}, fn device_id, acc ->
+      Enum.reduce(resolved, %{}, fn {device_id, device}, acc ->
         entries = Map.get(groups, device_id, [])
         old_state = Map.get(old_devices, device_id, %DeviceState{})
 
@@ -157,21 +183,23 @@ defmodule Homex.Adapter.MQTT do
         tombstones =
           Map.new(stale_components, fn {key, val} -> {key, Map.take(val, [:platform])} end)
 
+        device_config = device_config(node_id, known_devices, device)
+
         discovery_config = %{
-          device: build_discovery_config_device(device_id),
+          device: device_config,
           origin: Homex.origin(),
           components: Map.merge(tombstones, new_state.components)
         }
 
         payload = Homex.encode!(discovery_config)
 
-        topic = build_discovery_config_topic(discovery_prefix, device_id)
+        topic = build_discovery_config_topic(discovery_prefix, device_config)
 
         with :ok <- :emqtt.publish(emqtt_pid, topic, payload, retain: true) do
           Logger.debug("published discovery config")
         end
 
-        Map.put(acc, device_id, new_state)
+        Map.put(acc, device_id, %{new_state | topic: topic})
       end)
 
     subscriptions =
@@ -198,24 +226,42 @@ defmodule Homex.Adapter.MQTT do
     end
   end
 
-  defp build_discovery_config_device(nil) do
-    Homex.device()
-  end
+  # HA identifies a device by its identifiers, so they are scoped by the node id —
+  # unique per homex instance, stable across renames of the device itself.
+  defp identifier(node_id, %Homex.Device{id: id}), do: "homex-#{node_id}-#{id}"
 
-  defp build_discovery_config_device(device_id) do
-    device = Homex.device()
-    devices = Homex.devices()
-
+  @doc false
+  @spec device_config(String.t(), %{Homex.Device.id() => Homex.Device.t()}, Homex.Device.t()) ::
+          map()
+  def device_config(node_id, devices, %Homex.Device{} = device) do
     %{
-      name: devices[device_id].name,
-      identifiers: [to_string(device_id)],
-      via_device: List.first(device.identifiers)
+      name: device.name,
+      identifiers: [identifier(node_id, device)],
+      manufacturer: device.manufacturer,
+      model: device.model,
+      serial_number: device.serial_number,
+      sw_version: device.sw_version,
+      hw_version: device.hw_version,
+      via_device: build_via_device(node_id, devices, device)
     }
+    |> Map.reject(fn {_key, val} -> is_nil(val) end)
   end
 
-  defp build_discovery_config_topic(discovery_prefix, device_id) do
-    device = Homex.device()
-    "#{discovery_prefix}/device/#{Homex.slug(device.name)}-#{device_id || "default"}/config"
+  defp build_via_device(_node_id, _devices, %Homex.Device{via: nil}), do: nil
+
+  defp build_via_device(node_id, devices, %Homex.Device{via: via}) do
+    case Map.fetch(devices, via) do
+      {:ok, parent} ->
+        identifier(node_id, parent)
+
+      :error ->
+        Logger.warning("device #{inspect(via)} referenced by :via is not defined, ignoring")
+        nil
+    end
+  end
+
+  defp build_discovery_config_topic(discovery_prefix, device_config) do
+    "#{discovery_prefix}/device/#{hd(device_config.identifiers)}/config"
   end
 
   @impl GenServer

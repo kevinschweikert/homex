@@ -21,6 +21,22 @@ defmodule HomexTest do
     refute_receive :entities_changed
   end
 
+  test "put_device replaces and delete_device removes, notifying the adapters" do
+    assert :ok = Homex.put_device(:office, name: "Office")
+    assert_receive :entities_changed
+    assert %Homex.Device{name: "Office"} = Homex.devices()[:office]
+
+    assert :ok = Homex.put_device(:office, name: "Renamed")
+    assert_receive :entities_changed
+    assert %Homex.Device{name: "Renamed"} = Homex.devices()[:office]
+
+    assert {:error, %NimbleOptions.ValidationError{}} = Homex.put_device(:office, name: :nope)
+
+    assert :ok = Homex.delete_device(:office)
+    assert_receive :entities_changed
+    refute Homex.devices()[:office]
+  end
+
   test "removing an unknown entity returns an error" do
     assert {:error, :not_found} = Homex.remove_entity("does-not-exist")
   end

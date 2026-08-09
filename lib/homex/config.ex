@@ -1,30 +1,16 @@
 defmodule Homex.Config do
   @config_schema [
-                   device: [
-                     default: [],
-                     required: false,
-                     type: :keyword_list,
-                     doc:
-                       "If no device configuration is given the identifiers and name will be set to the hostname of the device running Homex and will fall back to \"homex device\" when hostname is not available",
-                     keys: [
-                       identifiers: [required: false, type: {:or, [{:list, :string}, :mfa]}],
-                       name: [required: false, type: {:or, [:string, :mfa]}],
-                       manufacturer: [required: false, type: {:or, [:string, :mfa]}],
-                       model: [required: false, type: {:or, [:string, :mfa]}],
-                       serial_number: [required: false, type: {:or, [:string, :mfa]}],
-                       sw_version: [required: false, type: {:or, [:string, :mfa]}],
-                       hw_version: [required: false, type: {:or, [:string, :mfa]}]
-                     ]
+                   node_id: [
+                     required: true,
+                     type: :string,
+                     doc: "identifies this Homex instance for HA"
                    ],
                    devices: [
                      required: false,
-                     type:
-                       {:list,
-                        {:keyword_list,
-                         [
-                           id: [required: true, type: :atom],
-                           name: [required: true, type: :string]
-                         ]}}
+                     default: [],
+                     type: :keyword_list,
+                     doc:
+                       "Devices this node exposes, keyed by id, with the options from `Homex.Device`. The `:default` device is always present and takes its name from the hostname unless configured."
                    ],
                    origin: [
                      required: false,
@@ -86,35 +72,33 @@ defmodule Homex.Config do
 
   @moduledoc "#{NimbleOptions.docs(@config_schema)}"
 
-  @typep t() :: %__MODULE__{
-           device: map(),
-           origin: map(),
-           discovery_prefix: String.t(),
-           entities: [module() | Keyword.t()],
-           broker: [
-             name: atom(),
-             host: charlist(),
-             port: :inet.port_number(),
-             username: charlist(),
-             password: charlist()
-           ]
-         }
+  @type t() :: %__MODULE__{
+          node_id: String.t(),
+          devices: %{Homex.Device.id() => Homex.Device.t()},
+          origin: map(),
+          discovery_prefix: String.t(),
+          entities: [module() | Keyword.t()],
+          broker: [
+            name: atom(),
+            host: charlist(),
+            port: :inet.port_number(),
+            username: charlist(),
+            password: charlist()
+          ]
+        }
 
-  defstruct [:device, :devices, :origin, :discovery_prefix, :entities, :broker]
+  defstruct [:node_id, :devices, :origin, :discovery_prefix, :entities, :broker]
 
   @doc false
   @spec new(Keyword.t()) :: t()
   def new(opts) do
     config = opts |> NimbleOptions.validate!(@config_schema)
-
-    device = config |> make_device_config()
-    devices = config |> make_devices_config()
     origin = config |> make_origin_config()
     broker = config |> make_broker_config()
 
     %__MODULE__{
-      device: device,
-      devices: devices,
+      node_id: config[:node_id],
+      devices: config |> make_devices_config(),
       origin: origin,
       broker: broker,
       discovery_prefix: config[:discovery_prefix],
@@ -122,42 +106,21 @@ defmodule Homex.Config do
     }
   end
 
-  @device_defaults [
-    name: {Homex, :hostname, []},
-    identifiers: [{Homex, :hostname, []}]
-  ]
-
-  defp make_device_config(opts) do
-    device = Keyword.get(opts, :device, [])
-
-    @device_defaults
-    |> Keyword.merge(device)
-    |> map_opts()
-    |> Enum.into(%{})
-  end
+  @device_defaults [default: [name: {Homex, :hostname, []}]]
 
   defp make_devices_config(opts) do
-    devices = Keyword.get(opts, :devices, [])
-    Map.new(devices, fn device -> {device[:id], %{name: device[:name]}} end)
-  end
-
-  defp make_origin_config(opts) do
-    opts
-    |> Keyword.get(:origin, [])
-    |> map_opts()
-    |> Enum.into(%{})
-  end
-
-  defp map_opts(opts) do
-    Enum.map(opts, fn
-      {key, list} when is_list(list) -> {key, Enum.map(list, &apply_mfa/1)}
-      {key, {_, _, _} = mfa} -> {key, apply_mfa(mfa)}
-      {key, value} -> {key, value}
+    @device_defaults
+    |> Keyword.merge(Keyword.fetch!(opts, :devices), fn _id, defaults, device_opts ->
+      Keyword.merge(defaults, device_opts)
+    end)
+    |> Map.new(fn {id, device_opts} ->
+      {:ok, device} = Homex.Device.new(id, device_opts)
+      {id, device}
     end)
   end
 
-  defp apply_mfa({m, f, a}) when is_atom(m) and is_atom(f) and is_list(a) do
-    apply(m, f, a)
+  defp make_origin_config(opts) do
+    opts |> Keyword.fetch!(:origin) |> Map.new()
   end
 
   defp make_broker_config(opts) do

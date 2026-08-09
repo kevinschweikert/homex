@@ -101,13 +101,18 @@ end
 ```elixir
 {:ok, pid} =
   Homex.start_link(
-    devices: [[id: :nested, name: "my-nested-device"]],
+    node_id: "livebook",
+    devices: [nested: [name: "my-nested-device", via: :default]],
     entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
   )
 ```
 
 ```elixir
-Homex.add_device(:new, "foo")
+Homex.put_device(:new, name: "foo", via: :default)
+```
+
+```elixir
+Homex.add_entity({MyLight, name: "new-light", device: :new})
 ```
 
 ```elixir

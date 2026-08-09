@@ -4,7 +4,7 @@
       {Registry,
        name: Homex.EntityRegistry,
        keys: :unique,
-       meta: [adapters: [{Homex.Adapter.Test, Homex.Adapter.Test}]]},
+       meta: [node_id: "test", adapters: [{Homex.Adapter.Test, Homex.Adapter.Test}]]},
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
       Homex.Adapter.Test
     ],

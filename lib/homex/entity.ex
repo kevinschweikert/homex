@@ -197,8 +197,8 @@ defmodule Homex.Entity do
       device: [
         required: false,
         type: :atom,
-        default: nil,
-        doc: "the nested device which the entity should be associcated with"
+        default: :default,
+        doc: "the id of the device this entity belongs to"
       ]
     ]
   end
@@ -260,7 +260,7 @@ defmodule Homex.Entity do
   @impl GenServer
   def init(%__MODULE__{module: module} = entity) do
     descriptor =
-      Homex.Descriptor.put_unique_id(entity.descriptor, Homex.device())
+      Homex.Descriptor.put_unique_id(entity.descriptor, Homex.node_id())
 
     with {:ok, _pid} <-
            Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do
