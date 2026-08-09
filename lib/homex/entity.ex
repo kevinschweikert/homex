@@ -1,27 +1,43 @@
 defmodule Homex.Entity do
   @moduledoc """
-  Defines the behaviour and struct for an entity implementation
+  Defines the behaviour and struct for an entity, and the scaffolding for
+  authoring entity kinds.
+
+  An entity is backed by a single `module` that `use`s a kind such as
+  `Homex.Entity.Switch`. It implements the required `c:new/1`, `c:setup/1` and
+  `c:handle_command/2` callbacks (the kind supplies `setup`/`handle_command`
+  via `use`) and may implement the optional handler callbacks (`handle_init`,
+  `handle_info`, `handle_call`, `handle_cast`) plus any kind-specific hooks
+  like `handle_on/1`.
+
+  ## Authoring a kind
+
+  `use Homex.Entity` adopts this behaviour and declares the optional handler
+  callbacks. The kind then writes its own `__using__/1` that splices in
+  `__entity__/3` — which generates `new/1`, delegates `setup`/`handle_command`,
+  and injects overridable identity defaults — alongside its own hook defaults.
+  `Homex.Entity.Sensor` (no hooks) and `Homex.Entity.Switch` (with hooks) are
+  the worked examples.
+
+  A kind reaches a hook with a plain call, `entity.module.handle_on(entity)`,
+  which always resolves because those defaults are injected into every user
+  module; overrides can chain to them with `super/1`.
   """
   use GenServer
 
-  @doc "The Home Assistant entity descriptor"
-  @callback descriptor() :: Homex.Descriptor.t()
+  @doc "Builds the entity struct from validated options"
+  @callback new(opts :: keyword()) :: {:ok, t()} | {:error, term()}
 
   @doc """
-  Configures the intial state for the switch
+  Configures the initial state for the entity
   """
-  @callback handle_init(entity :: t()) :: entity :: t()
+  @callback setup(entity :: t()) :: entity :: t()
 
   @callback handle_command(cmd :: map(), entity :: t()) :: entity :: t()
 
-  @doc """
-  If an `update_interval` is set, this callback will be fired
-  """
-  @callback handle_timer(entity :: Entity.t()) :: entity :: t()
-
   @type t() :: %__MODULE__{
           name: term(),
-          impl: module(),
+          module: module() | nil,
           values: map(),
           changes: map(),
           private: map(),
@@ -30,78 +46,146 @@ defmodule Homex.Entity do
 
   defstruct [
     :name,
-    :impl,
+    :module,
     :descriptor,
     values: %{},
     changes: %{},
     private: %{}
   ]
 
-  defmacro __using__(opts) do
-    quote bind_quoted: [opts: opts], generated: true do
-      import Homex.Entity
-      alias Homex.Entity
+  @doc false
+  defmacro __using__(_opts) do
+    quote do
       @behaviour Homex.Entity
 
-      @update_interval opts[:update_interval]
+      @doc "Gets called after the entity started"
+      @callback handle_init(entity :: Homex.Entity.t()) :: Homex.Entity.t()
 
-      def update_interval, do: @update_interval
+      @doc """
+      Gets called for any `send/2` message the entity process receives that homex does not
+      handle itself
+      """
+      @callback handle_info(msg :: term(), entity :: Homex.Entity.t()) :: Homex.Entity.t()
 
-      @impl Homex.Entity
+      @doc """
+      Gets called for `GenServer.call/2` messages to the entity. Returns the reply
+      and the entity
+      """
+      @callback handle_call(msg :: term(), entity :: Homex.Entity.t()) ::
+                  {reply :: term(), Homex.Entity.t()}
+
+      @doc "Gets called for `GenServer.cast/2` messages to the entity"
+      @callback handle_cast(msg :: term(), entity :: Homex.Entity.t()) :: Homex.Entity.t()
+
+      @optional_callbacks handle_init: 1, handle_info: 2, handle_call: 2, handle_cast: 2
+    end
+  end
+
+  @doc """
+  Shared scaffolding a kind splices into its own `__using__/1`.
+
+  Wires up the behaviour, a runtime `new/1`, the `setup`/`handle_command`
+  delegations, and overridable identity defaults for the platform-independent
+  callbacks. A kind adds its own hook defaults (e.g. `handle_on/1`) alongside.
+  """
+  def __entity__(kind, using_opts, imports \\ []) do
+    if Macro.quoted_literal?(using_opts) do
+      with {:error, error} <- kind.new(using_opts), do: raise(error)
+    end
+
+    quote generated: true do
+      @behaviour unquote(kind)
+
+      import unquote(kind), only: unquote(imports)
+      import Homex.Entity, only: [put_private: 3, get_private: 2]
+      alias Homex.Entity
+
+      def new(opts \\ []) do
+        with {:ok, entity} <- unquote(kind).new(Keyword.merge(unquote(using_opts), opts)) do
+          {:ok, %{entity | module: __MODULE__}}
+        end
+      end
+
+      defdelegate setup(entity), to: unquote(kind)
+      defdelegate handle_command(cmd, entity), to: unquote(kind)
+
+      @doc false
+      def __homex_entity__, do: true
+
+      # Overridable defaults so every callback resolves to a real function (no
+      # reflection at dispatch) and overrides can chain with super/1.
       def handle_init(entity), do: entity
-
-      @impl Homex.Entity
-      def handle_command(_cmd, entity), do: entity
-
-      @impl Homex.Entity
-      def handle_timer(entity), do: entity
-
-      defoverridable handle_init: 1, handle_timer: 1, handle_command: 2
+      def handle_info(_msg, entity), do: entity
+      def handle_call(_msg, entity), do: {{:error, :not_handled}, entity}
+      def handle_cast(_msg, entity), do: entity
+      defoverridable handle_init: 1, handle_info: 2, handle_call: 2, handle_cast: 2
     end
   end
 
-  def via(name), do: {:via, Registry, {Homex.EntityRegistry, name}}
-  def via(name, meta), do: {:via, Registry, {Homex.EntityRegistry, name, meta}}
+  ## Public API
 
-  def child_spec(%__MODULE__{} = entity) do
-    %{
-      id: {__MODULE__, entity.name},
-      start: {__MODULE__, :start_link, [entity]},
-      restart: :transient
-    }
-  end
+  @doc """
+  Normalizes an entity spec into a `%Homex.Entity{}`.
 
-  def start_link(%__MODULE__{} = entity), do: GenServer.start_link(__MODULE__, entity)
+  Accepts a ready-made struct, a `{module, opts}` pair, or a bare module whose
+  options were baked in at `use` time. The module must be runnable: a
+  `use`-based module or `Homex.Entity.DeviceTrigger`. A plain kind module such
+  as `Homex.Entity.Switch` returns `{:error, :entity_not_runnable}` — it has to
+  be `use`d.
+  """
+  @spec new(t() | {module(), keyword()} | module()) :: {:ok, t()} | {:error, term()}
+  def new(%__MODULE__{} = entity), do: {:ok, entity}
+  def new({module, opts}) when is_atom(module) and is_list(opts), do: build(module, opts)
+  def new(module) when is_atom(module), do: build(module, [])
 
-  # TODO: go over this, if this function is still needed
-  @doc false
-  @spec new(module() | Keyword.t()) :: t() | nil
-  def new(module) when is_atom(module), do: new(name: module, impl: module)
+  defp build(module, opts) do
+    cond do
+      not (Code.ensure_loaded?(module) and function_exported?(module, :new, 1)) ->
+        {:error, :entity_invalid}
 
-  def new(opts) do
-    if valid?(opts) do
-      struct(__MODULE__, opts)
-    else
-      nil
+      # A plain kind module builds a struct but has no handlers to dispatch to,
+      # so it would crash at boot. Only `use`-based modules and DeviceTrigger
+      # carry the marker that opts them into being run directly.
+      not function_exported?(module, :__homex_entity__, 0) ->
+        {:error, :entity_not_runnable}
+
+      true ->
+        module.new(opts)
     end
   end
 
-  # TODO: go over this, if this function is still needed
-  def valid?(%__MODULE__{}), do: true
-
-  def valid?(module) when is_atom(module), do: implements_behaviour?(module)
-
-  def valid?(opts) when is_list(opts) do
-    Keyword.has_key?(opts, :name) and Keyword.has_key?(opts, :impl) and
-      implements_behaviour?(Keyword.get(opts, :impl))
-  end
-
-  def valid?(_), do: false
-
+  @doc "The current values of the entity"
   def snapshot(name), do: Homex.call(name, {:homex, :snapshot})
 
+  @doc "Delivers a command map to the entity"
   def send_command(name, cmd) do
     Homex.notify(name, {:homex, :command, cmd})
+  end
+
+  @doc """
+  Puts a value into the Entity struct to retrieve it later. Can be used as a key-value store for user data
+  """
+  @spec put_private(t(), atom(), term()) :: t()
+  def put_private(%__MODULE__{private: private} = entity, key, value) when is_atom(key) do
+    private = Map.put(private, key, value)
+    %{entity | private: private}
+  end
+
+  @doc """
+  Gets the value from the Entity struct
+  """
+  @spec get_private(t(), atom()) :: term()
+  def get_private(%__MODULE__{private: private}, key) when is_atom(key) do
+    Map.get(private, key)
+  end
+
+  ## Platform API
+
+  @doc false
+  def base_opts_schema do
+    [
+      name: [required: true, type: :string, doc: "the name of the entity"]
+    ]
   end
 
   @doc false
@@ -143,49 +227,30 @@ defmodule Homex.Entity do
     %{entity | changes: %{}, values: Map.merge(values, diff)}
   end
 
-  @doc """
-  Puts a value into the Entity struct to retrieve it later. Can be used as a key-value store for user data
-  """
-  @spec put_private(t(), atom(), term()) :: t()
-  def put_private(%__MODULE__{private: private} = entity, key, value) when is_atom(key) do
-    private = Map.put(private, key, value)
-    %{entity | private: private}
+  ## Process lifecycle
+
+  def via(name), do: {:via, Registry, {Homex.EntityRegistry, name}}
+  def via(name, meta), do: {:via, Registry, {Homex.EntityRegistry, name, meta}}
+
+  def child_spec(%__MODULE__{} = entity) do
+    %{
+      id: {__MODULE__, entity.name},
+      start: {__MODULE__, :start_link, [entity]},
+      restart: :transient
+    }
   end
 
-  @doc """
-  Gets the value from the Entity struct
-  """
-  @spec get_private(t(), atom()) :: term()
-  def get_private(%__MODULE__{private: private}, key) when is_atom(key) do
-    Map.get(private, key)
-  end
-
-  @doc """
-  Checks if the given module implements the behaviour from this module
-  """
-  @spec implements_behaviour?(atom()) :: boolean()
-  def implements_behaviour?(module) when is_atom(module) do
-    attrs = module.__info__(:attributes) |> Keyword.get_values(:behaviour) |> List.flatten()
-    __MODULE__ in attrs
-  end
+  def start_link(%__MODULE__{} = entity), do: GenServer.start_link(__MODULE__, entity)
 
   @impl GenServer
-  def init(%__MODULE__{impl: impl} = entity) do
-    case impl.update_interval() do
-      :never -> :ok
-      time -> :timer.send_interval(time, {:homex, :timer})
-    end
-
-    descriptor =
-      impl.descriptor()
-      |> Homex.Descriptor.put_instance_name(entity.name)
-      |> Homex.Descriptor.put_unique_id(Homex.device())
+  def init(%__MODULE__{module: module} = entity) do
+    descriptor = Homex.Descriptor.put_unique_id(entity.descriptor, Homex.device())
 
     with {:ok, _pid} <-
            Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do
       values = Map.new(descriptor.fields, fn {key, _kind} -> {key, nil} end)
       entity = %{entity | descriptor: descriptor, values: values}
-      {:ok, entity |> impl.handle_init() |> execute_change()}
+      {:ok, entity |> module.setup() |> execute_change()}
     end
   end
 
@@ -200,43 +265,24 @@ defmodule Homex.Entity do
     {:stop, :normal, :ok, entity}
   end
 
-  def handle_call(msg, _from, %{impl: impl} = entity) do
-    if function_exported?(impl, :handle_call, 2) do
-      {reply, entity} = impl.handle_call(msg, entity)
-      {:reply, reply, execute_change(entity)}
-    else
-      {:reply, {:error, :not_handled}, entity}
-    end
+  def handle_call(msg, _from, %{module: module} = entity) do
+    {reply, entity} = module.handle_call(msg, entity)
+    {:reply, reply, execute_change(entity)}
   end
 
   @impl GenServer
-  def handle_cast(msg, %{impl: impl} = entity) do
-    if function_exported?(impl, :handle_cast, 2) do
-      entity = impl.handle_cast(msg, entity) |> execute_change()
-      {:noreply, entity}
-    else
-      {:noreply, entity}
-    end
+  def handle_cast(msg, %{module: module} = entity) do
+    {:noreply, module.handle_cast(msg, entity) |> execute_change()}
   end
 
   @impl GenServer
-  def handle_info({:homex, :timer}, %{impl: impl} = entity) do
-    entity = entity |> impl.handle_timer() |> execute_change()
+  def handle_info({:homex, :command, cmd}, %{module: module} = entity) do
+    entity = module.handle_command(cmd, entity) |> execute_change()
     {:noreply, entity}
   end
 
-  def handle_info({:homex, :command, cmd}, %{impl: impl} = entity) do
-    entity = impl.handle_command(cmd, entity) |> execute_change()
-    {:noreply, entity}
-  end
-
-  # Fallback, passes the info msg along to the implementation for handling
-  def handle_info(msg, %{impl: impl} = entity) do
-    if function_exported?(impl, :handle_info, 2) do
-      entity = impl.handle_info(msg, entity) |> execute_change()
-      {:noreply, entity}
-    else
-      {:noreply, entity}
-    end
+  # Fallback, passes the info msg along to the entity module
+  def handle_info(msg, %{module: module} = entity) do
+    {:noreply, module.handle_info(msg, entity) |> execute_change()}
   end
 end

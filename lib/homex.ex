@@ -1,8 +1,6 @@
 defmodule Homex do
   use Supervisor
 
-  require Logger
-
   def start_link(init_arg \\ []) do
     {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
     Supervisor.start_link(__MODULE__, rest, name: name)
@@ -167,19 +165,11 @@ defmodule Homex do
     notify_adapters()
   end
 
-  defp start_entity(opts) do
-    with %Homex.Entity{} = entity <- Homex.Entity.new(opts),
+  defp start_entity(spec) do
+    with {:ok, entity} <- Homex.Entity.new(spec),
          {:ok, _pid} <-
            DynamicSupervisor.start_child(Homex.EntitySupervisor, {Homex.Entity, entity}) do
       :ok
-    else
-      nil ->
-        Logger.error("Can't add entity, invalid configuration #{inspect(opts)}")
-        {:error, :entity_invalid}
-
-      {:error, reason} ->
-        Logger.error("Can't start entity #{inspect(opts)}: #{inspect(reason)}")
-        {:error, reason}
     end
   end
 

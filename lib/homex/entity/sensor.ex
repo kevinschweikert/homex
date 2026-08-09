@@ -1,13 +1,8 @@
 defmodule Homex.Entity.Sensor do
-  @opts_schema [
-                 name: [required: true, type: :string, doc: "the name of the entity"],
-                 update_interval: [
-                   required: false,
-                   type: {:or, [:atom, :integer]},
-                   default: 10_000,
-                   doc:
-                     "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
-                 ],
+  use Homex.Entity
+
+  @opts_schema Homex.Entity.base_opts_schema()
+               |> Keyword.merge(
                  retain: [
                    required: false,
                    type: :boolean,
@@ -35,7 +30,7 @@ defmodule Homex.Entity.Sensor do
                    doc:
                      "The unit of measurement that the sensor's value is expressed in. Available units in depending on device class (see second column): https://developers.home-assistant.io/docs/core/entity/sensor/#available-device-classes"
                  ]
-               ]
+               )
                |> NimbleOptions.new!()
 
   @moduledoc """
@@ -49,18 +44,6 @@ defmodule Homex.Entity.Sensor do
 
   #{NimbleOptions.docs(@opts_schema)}
 
-  ## Overridable Functions
-
-  The following functions can be overridden in your entity:
-
-  * `handle_init/1` - From `Homex.Entity`
-  * `handle_timer/1` - From `Homex.Entity`
-
-  ### Default Implementations
-
-  All overridable functions have safe default implementations that return the entity unchanged.
-  You only need to override the functions you want to customize.
-
   ## Example
 
   ```elixir
@@ -70,9 +53,13 @@ defmodule Homex.Entity.Sensor do
       unit_of_measurement: "°C",
       device_class: "temperature"
 
-    def handle_timer(entity) do
-      value = Sensor.read()
-      entity |> set_value(value)
+    def handle_init(entity) do
+      :timer.send_interval(10_000, :measure)
+      entity
+    end
+
+    def handle_info(:measure, entity) do
+      set_value(entity, Sensor.read())
     end
   end
   ```
@@ -80,45 +67,39 @@ defmodule Homex.Entity.Sensor do
 
   alias Homex.Entity
 
+  defmacro __using__(opts), do: Homex.Entity.__entity__(__MODULE__, opts, set_value: 2)
+
+  @impl Homex.Entity
+  def new(opts) do
+    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
+      {:ok,
+       %Entity{
+         name: opts[:name],
+         module: __MODULE__,
+         descriptor: %Homex.Descriptor{
+           kind: :sensor,
+           fields: %{state: :state},
+           name: opts[:name],
+           options: %{
+             device_class: opts[:device_class],
+             unit_of_measurement: opts[:unit_of_measurement],
+             state_class: opts[:state_class]
+           },
+           transport: %{mqtt: [retain: opts[:retain]]}
+         }
+       }}
+    end
+  end
+
+  @impl Homex.Entity
+  def setup(%{module: m} = entity), do: m.handle_init(entity)
+
+  @impl Homex.Entity
+  def handle_command(_cmd, entity), do: entity
+
   @doc """
   Sets the entity value
   """
-  @callback set_value(entity :: Entity.t(), value :: term()) :: entity :: Entity.t()
-
-  defmacro __using__(opts) do
-    opts = NimbleOptions.validate!(opts, @opts_schema)
-
-    quote bind_quoted: [opts: opts], generated: true do
-      use Homex.Entity, update_interval: opts[:update_interval]
-      @behaviour Homex.Entity.Sensor
-
-      @impl Homex.Entity
-      def descriptor do
-        %Homex.Descriptor{
-          kind: :sensor,
-          fields: %{state: :state},
-          name: unquote(opts[:name]),
-          options: %{
-            device_class: unquote(opts[:device_class]),
-            unit_of_measurement: unquote(opts[:unit_of_measurement]),
-            state_class: unquote(opts[:state_class])
-          },
-          transport: %{mqtt: [retain: unquote(opts[:retain])]}
-        }
-      end
-
-      @impl Homex.Entity.Sensor
-      def set_value(%Entity{} = entity, value) do
-        Entity.put_change(entity, :state, value)
-      end
-
-      @impl Homex.Entity
-      def handle_init(entity), do: super(entity)
-
-      @impl Homex.Entity
-      def handle_timer(entity), do: super(entity)
-
-      defoverridable handle_init: 1, handle_timer: 1
-    end
-  end
+  @spec set_value(Entity.t(), term()) :: Entity.t()
+  def set_value(%Entity{} = entity, value), do: Entity.put_change(entity, :state, value)
 end

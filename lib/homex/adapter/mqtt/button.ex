@@ -1,4 +1,5 @@
 defmodule Homex.Adapter.MQTT.Button do
+  @moduledoc false
   @behaviour Homex.Adapter.MQTT.Platform
 
   alias Homex.Adapter.MQTT

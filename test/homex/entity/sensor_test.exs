@@ -7,11 +7,13 @@ defmodule Homex.Entity.SensorTest do
       device_class: "temperature",
       unit_of_measurement: "°C"
 
+    @impl Homex.Entity.Sensor
     def handle_info({:set_value, value}, entity), do: set_value(entity, value)
   end
 
   setup do
-    start_supervised!({Entity, Entity.new(TestSensor)})
+    {:ok, entity} = Entity.new(TestSensor)
+    start_supervised!({Entity, entity})
     :ok
   end
 
@@ -43,5 +45,14 @@ defmodule Homex.Entity.SensorTest do
   test "sensors ignore inbound commands" do
     Entity.send_command("test-sensor", %{state: 99})
     refute_receive {:publish_state, _, _}
+  end
+
+  describe "set_value/2" do
+    alias Homex.Entity.Sensor
+
+    test "records the typed value as a change" do
+      {:ok, entity} = Sensor.new(name: "fn-sensor")
+      assert Sensor.set_value(entity, 21.5).changes == %{state: 21.5}
+    end
   end
 end

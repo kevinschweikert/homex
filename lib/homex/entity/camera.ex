@@ -1,13 +1,8 @@
 defmodule Homex.Entity.Camera do
-  @opts_schema [
-                 name: [required: true, type: :string, doc: "the name of the entity"],
-                 update_interval: [
-                   required: false,
-                   type: {:or, [:atom, :integer]},
-                   default: 10_000,
-                   doc:
-                     "the interval in milliseconds in which `handle_timer/1` get's called. Can also be `:never` to disable the timer callback"
-                 ],
+  use Homex.Entity
+
+  @opts_schema Homex.Entity.base_opts_schema()
+               |> Keyword.merge(
                  retain: [
                    required: false,
                    type: :boolean,
@@ -34,7 +29,7 @@ defmodule Homex.Entity.Camera do
                    doc:
                      "The encoding of the image payloads received. Set to \"b64\" to enable base64 decoding of image payload. If not set, the image payload must be raw binary data."
                  ]
-               ]
+               )
                |> NimbleOptions.new!()
 
   @moduledoc """
@@ -48,25 +43,18 @@ defmodule Homex.Entity.Camera do
 
   #{NimbleOptions.docs(@opts_schema)}
 
-  ## Overridable Functions
-
-  The following functions can be overridden in your entity:
-
-  * `handle_init/1` - From `Homex.Entity`
-  * `handle_timer/1` - From `Homex.Entity`
-
-  ### Default Implementations
-
-  All overridable functions have safe default implementations that return the entity unchanged.
-  You only need to override the functions you want to customize.
-
   ## Example
 
   ```elixir
   defmodule MyCamera do
     use Homex.Entity.Camera, name: "my-camera"
 
-    def handle_timer(entity) do
+    def handle_init(entity) do
+      :timer.send_interval(10_000, :snap)
+      entity
+    end
+
+    def handle_info(:snap, entity) do
       img = Image.open!("some/path/to/image.jpg") |> Image.write!(:memory, suffix: ".jpg")
       entity |> set_image(img) |> set_attributes(%{foo: "bar"})
     end
@@ -76,55 +64,51 @@ defmodule Homex.Entity.Camera do
 
   alias Homex.Entity
 
-  @doc """
-  sets the image
-  """
-  @callback set_image(entity :: Entity.t(), image :: binary()) :: entity :: Entity.t()
-
-  @doc """
-  sets the attributes
-  """
-  @callback set_attributes(entity :: Entity.t(), attributes :: Map.t()) :: entity :: Entity.t()
-
   defmacro __using__(opts) do
-    opts = NimbleOptions.validate!(opts, @opts_schema)
+    Homex.Entity.__entity__(__MODULE__, opts, set_image: 2, set_attributes: 2)
+  end
 
-    quote bind_quoted: [opts: opts], generated: true do
-      use Homex.Entity, update_interval: opts[:update_interval]
-      @behaviour Homex.Entity.Camera
-
-      @impl Homex.Entity
-      def descriptor do
-        %Homex.Descriptor{
-          kind: :camera,
-          fields: %{image: :state, attrs: :state},
-          name: unquote(opts[:name]),
-          options: %{
-            encoding: unquote(opts[:encoding]),
-            image_encoding: unquote(opts[:image_encoding]),
-            enabled_by_default: unquote(opts[:enabled_by_default])
-          },
-          transport: %{mqtt: [retain: unquote(opts[:retain])]}
-        }
-      end
-
-      @impl Homex.Entity.Camera
-      def set_image(%Entity{} = entity, image) when is_binary(image) do
-        Entity.put_change(entity, :image, image)
-      end
-
-      @impl Homex.Entity.Camera
-      def set_attributes(%Entity{} = entity, attrs) when is_map(attrs) do
-        Entity.put_change(entity, :attrs, attrs)
-      end
-
-      @impl Homex.Entity
-      def handle_init(entity), do: super(entity)
-
-      @impl Homex.Entity
-      def handle_timer(entity), do: super(entity)
-
-      defoverridable handle_init: 1, handle_timer: 1
+  @impl Homex.Entity
+  def new(opts) do
+    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
+      {:ok,
+       %Entity{
+         name: opts[:name],
+         module: __MODULE__,
+         descriptor: %Homex.Descriptor{
+           kind: :camera,
+           fields: %{image: :state, attrs: :state},
+           name: opts[:name],
+           options: %{
+             encoding: opts[:encoding],
+             image_encoding: opts[:image_encoding],
+             enabled_by_default: opts[:enabled_by_default]
+           },
+           transport: %{mqtt: [retain: opts[:retain]]}
+         }
+       }}
     end
+  end
+
+  @impl Homex.Entity
+  def setup(%{module: m} = entity), do: m.handle_init(entity)
+
+  @impl Homex.Entity
+  def handle_command(_cmd, entity), do: entity
+
+  @doc """
+  Sets the image
+  """
+  @spec set_image(Entity.t(), binary()) :: Entity.t()
+  def set_image(%Entity{} = entity, image) when is_binary(image) do
+    Entity.put_change(entity, :image, image)
+  end
+
+  @doc """
+  Sets the attributes
+  """
+  @spec set_attributes(Entity.t(), map()) :: Entity.t()
+  def set_attributes(%Entity{} = entity, attrs) when is_map(attrs) do
+    Entity.put_change(entity, :attrs, attrs)
   end
 end

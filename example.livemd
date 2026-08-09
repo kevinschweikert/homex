@@ -28,10 +28,14 @@ defmodule MyTemperature do
   use Homex.Entity.Sensor,
     name: "my-temperature",
     unit_of_measurement: "°C",
-    device_class: "temperature",
-    update_interval: 10_000
+    device_class: "temperature"
 
-  def handle_timer(entity) do
+  def handle_init(entity) do
+    :timer.send_interval(10_000, :measure)
+    entity
+  end
+
+  def handle_info(:measure, entity) do
     entity |> set_value(Enum.random(-40..40//1))
   end
 end
@@ -40,10 +44,14 @@ defmodule MyHumidity do
   use Homex.Entity.Sensor,
     name: "my-humidiy",
     unit_of_measurement: "%",
-    device_class: "humidity",
-    update_interval: 10_000
+    device_class: "humidity"
 
-  def handle_timer(entity) do
+  def handle_init(entity) do
+    :timer.send_interval(10_000, :measure)
+    entity
+  end
+
+  def handle_info(:measure, entity) do
     entity |> set_value(Enum.random(20..90//1))
   end
 end
@@ -75,9 +83,14 @@ defmodule MyDevice do
 end
 
 defmodule MyCamera do
-  use Homex.Entity.Camera, name: "my-camera", update_interval: 5_000
+  use Homex.Entity.Camera, name: "my-camera"
 
-  def handle_timer(entity) do
+  def handle_init(entity) do
+    :timer.send_interval(5_000, :snap)
+    entity
+  end
+
+  def handle_info(:snap, entity) do
     response = Req.get!("https://picsum.photos/200")
     entity |> set_image(response.body) |> set_attributes(%{foo: "bar"})
   end
@@ -93,4 +106,8 @@ end
 
 ```elixir
 Homex.Entity.DeviceTrigger.trigger("my-device-trigger")
+```
+
+```elixir
+Homex.Entity.snapshot("my-light")
 ```
