@@ -75,6 +75,7 @@ defmodule Homex.Entity.Switch do
          module: __MODULE__,
          descriptor: %Homex.Descriptor{
            kind: :switch,
+           device: opts[:device],
            fields: %{state: :state},
            name: opts[:name],
            transport: %{mqtt: [retain: opts[:retain]]}

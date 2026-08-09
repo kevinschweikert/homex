@@ -77,6 +77,7 @@ defmodule Homex.Entity.Camera do
          module: __MODULE__,
          descriptor: %Homex.Descriptor{
            kind: :camera,
+           device: opts[:device],
            fields: %{image: :state, attrs: :state},
            name: opts[:name],
            options: %{

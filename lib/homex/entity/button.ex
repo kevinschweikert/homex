@@ -77,6 +77,7 @@ defmodule Homex.Entity.Button do
          module: __MODULE__,
          descriptor: %Homex.Descriptor{
            kind: :button,
+           device: opts[:device],
            fields: %{pressed: :event, attrs: :state},
            name: opts[:name],
            options: %{

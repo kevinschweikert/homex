@@ -20,12 +20,14 @@ defmodule Homex.Adapter.MQTT do
     :emqtt_opts,
     :emqtt_ref,
     :discovery_prefix,
-    :device,
-    :origin,
     connected: false,
-    components: %{},
-    subscriptions: %{}
+    subscriptions: %{},
+    devices: %{}
   ]
+
+  defmodule DeviceState do
+    defstruct components: %{}, subscriptions: %{}
+  end
 
   def start_link(%Homex.Config{} = config) do
     GenServer.start_link(__MODULE__, config, name: __MODULE__)
@@ -89,8 +91,6 @@ defmodule Homex.Adapter.MQTT do
   def init(config) do
     emqtt_opts = config.broker
     discovery_prefix = config.discovery_prefix
-    device = config.device
-    origin = config.origin
 
     Logger.put_application_level(:emqtt, :info)
     Process.flag(:trap_exit, true)
@@ -98,9 +98,7 @@ defmodule Homex.Adapter.MQTT do
     {:ok,
      %__MODULE__{
        emqtt_opts: emqtt_opts,
-       discovery_prefix: discovery_prefix,
-       device: device,
-       origin: origin
+       discovery_prefix: discovery_prefix
      }, {:continue, :connect}}
   end
 
@@ -129,58 +127,95 @@ defmodule Homex.Adapter.MQTT do
         %__MODULE__{
           emqtt_pid: emqtt_pid,
           discovery_prefix: discovery_prefix,
-          device: device,
-          origin: origin,
-          components: old_components,
-          subscriptions: old_subscriptions
+          devices: old_devices
         } = state
       ) do
-    configs =
-      Homex.descriptors()
-      |> Enum.flat_map(fn descriptor ->
-        case component(descriptor) do
-          :unsupported -> []
-          {:ok, comp} -> [{descriptor, comp, subscriptions(descriptor)}]
+    groups = Homex.descriptors() |> Enum.group_by(& &1.device)
+    device_ids = Map.merge(old_devices, groups) |> Map.keys()
+
+    devices =
+      Enum.reduce(device_ids, %{}, fn device_id, acc ->
+        entries = Map.get(groups, device_id, [])
+        old_state = Map.get(old_devices, device_id, %DeviceState{})
+
+        new_state = %DeviceState{
+          components: build_components(entries),
+          subscriptions: build_subscriptions(entries)
+        }
+
+        for topic <- Map.keys(new_state.subscriptions) -- Map.keys(old_state.subscriptions) do
+          :emqtt.subscribe(emqtt_pid, topic)
         end
+
+        for topic <- Map.keys(old_state.subscriptions) -- Map.keys(new_state.subscriptions) do
+          :emqtt.unsubscribe(emqtt_pid, topic)
+        end
+
+        stale_keys = Map.keys(old_state.components) -- Map.keys(new_state.components)
+        stale_components = Map.take(old_state.components, stale_keys)
+
+        tombstones =
+          Map.new(stale_components, fn {key, val} -> {key, Map.take(val, [:platform])} end)
+
+        discovery_config = %{
+          device: build_discovery_config_device(device_id),
+          origin: Homex.origin(),
+          components: Map.merge(tombstones, new_state.components)
+        }
+
+        payload = Homex.encode!(discovery_config)
+
+        topic = build_discovery_config_topic(discovery_prefix, device_id)
+
+        with :ok <- :emqtt.publish(emqtt_pid, topic, payload, retain: true) do
+          Logger.debug("published discovery config")
+        end
+
+        Map.put(acc, device_id, new_state)
       end)
 
-    components =
-      for {desc, component, _subscriptions} <- configs, into: %{} do
-        {desc.unique_id, component}
-      end
-
     subscriptions =
-      for {desc, _component, subscriptions} <- configs, topic <- subscriptions, into: %{} do
-        {topic, desc}
+      Enum.reduce(devices, %{}, fn {_device_id, device_state}, acc ->
+        Map.merge(acc, device_state.subscriptions)
+      end)
+
+    {:noreply, %{state | subscriptions: subscriptions, devices: devices}}
+  end
+
+  defp build_components(entries) do
+    entries
+    |> Enum.reduce(%{}, fn descriptor, acc ->
+      case component(descriptor) do
+        :unsupported -> acc
+        {:ok, comp} -> Map.put(acc, descriptor.unique_id, comp)
       end
+    end)
+  end
 
-    for topic <- Map.keys(subscriptions) -- Map.keys(old_subscriptions) do
-      :emqtt.subscribe(emqtt_pid, topic)
+  defp build_subscriptions(entries) do
+    for descriptor <- entries, topic <- subscriptions(descriptor), into: %{} do
+      {topic, descriptor}
     end
+  end
 
-    for topic <- Map.keys(old_subscriptions) -- Map.keys(subscriptions) do
-      :emqtt.unsubscribe(emqtt_pid, topic)
-    end
+  defp build_discovery_config_device(nil) do
+    Homex.device()
+  end
 
-    stale_keys = Map.keys(old_components) -- Map.keys(components)
-    stale_components = Map.take(old_components, stale_keys)
-    tombstones = Map.new(stale_components, fn {key, val} -> {key, Map.take(val, [:platform])} end)
+  defp build_discovery_config_device(device_id) do
+    device = Homex.device()
+    devices = Homex.devices()
 
-    discovery_config = %{
-      device: device,
-      origin: origin,
-      components: Map.merge(tombstones, components)
+    %{
+      name: devices[device_id].name,
+      identifiers: [to_string(device_id)],
+      via_device: List.first(device.identifiers)
     }
+  end
 
-    topic = "#{discovery_prefix}/device/#{Homex.slug(device.name)}/config"
-
-    payload = Homex.encode!(discovery_config)
-
-    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, retain: true) do
-      Logger.debug("published discovery config")
-    end
-
-    {:noreply, %{state | subscriptions: subscriptions, components: components}}
+  defp build_discovery_config_topic(discovery_prefix, device_id) do
+    device = Homex.device()
+    "#{discovery_prefix}/device/#{Homex.slug(device.name)}-#{device_id || "default"}/config"
   end
 
   @impl GenServer
@@ -221,6 +256,7 @@ defmodule Homex.Adapter.MQTT do
       ) do
     Logger.debug("Received #{inspect(payload)} from #{inspect(topic)}")
 
+    # will only yield one descriptor per topic because the topic includes the unique id
     with %Homex.Descriptor{} = descriptor <- subscriptions[topic],
          command when not is_nil(command) <- normalize(descriptor, payload) do
       Homex.Entity.send_command(descriptor.name, command)

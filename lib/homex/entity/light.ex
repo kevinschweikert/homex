@@ -94,6 +94,7 @@ defmodule Homex.Entity.Light do
          module: __MODULE__,
          descriptor: %Homex.Descriptor{
            kind: :light,
+           device: opts[:device],
            fields: fields,
            name: opts[:name],
            options: %{modes: modes},

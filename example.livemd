@@ -26,6 +26,7 @@ end
 
 defmodule MyTemperature do
   use Homex.Entity.Sensor,
+    device: :nested,
     name: "my-temperature",
     unit_of_measurement: "°C",
     device_class: "temperature"
@@ -100,8 +101,13 @@ end
 ```elixir
 {:ok, pid} =
   Homex.start_link(
+    devices: [[id: :nested, name: "my-nested-device"]],
     entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
   )
+```
+
+```elixir
+Homex.add_device(:new, "foo")
 ```
 
 ```elixir

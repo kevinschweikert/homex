@@ -16,6 +16,16 @@ defmodule Homex.Config do
                        hw_version: [required: false, type: {:or, [:string, :mfa]}]
                      ]
                    ],
+                   devices: [
+                     required: false,
+                     type:
+                       {:list,
+                        {:keyword_list,
+                         [
+                           id: [required: true, type: :atom],
+                           name: [required: true, type: :string]
+                         ]}}
+                   ],
                    origin: [
                      required: false,
                      type: :non_empty_keyword_list,
@@ -90,7 +100,7 @@ defmodule Homex.Config do
            ]
          }
 
-  defstruct [:device, :origin, :discovery_prefix, :entities, :broker]
+  defstruct [:device, :devices, :origin, :discovery_prefix, :entities, :broker]
 
   @doc false
   @spec new(Keyword.t()) :: t()
@@ -98,11 +108,13 @@ defmodule Homex.Config do
     config = opts |> NimbleOptions.validate!(@config_schema)
 
     device = config |> make_device_config()
+    devices = config |> make_devices_config()
     origin = config |> make_origin_config()
     broker = config |> make_broker_config()
 
     %__MODULE__{
       device: device,
+      devices: devices,
       origin: origin,
       broker: broker,
       discovery_prefix: config[:discovery_prefix],
@@ -122,6 +134,11 @@ defmodule Homex.Config do
     |> Keyword.merge(device)
     |> map_opts()
     |> Enum.into(%{})
+  end
+
+  defp make_devices_config(opts) do
+    devices = Keyword.get(opts, :devices, [])
+    Map.new(devices, fn device -> {device[:id], %{name: device[:name]}} end)
   end
 
   defp make_origin_config(opts) do

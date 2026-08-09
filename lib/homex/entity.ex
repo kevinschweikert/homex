@@ -184,7 +184,13 @@ defmodule Homex.Entity do
   @doc false
   def base_opts_schema do
     [
-      name: [required: true, type: :string, doc: "the name of the entity"]
+      name: [required: true, type: :string, doc: "the name of the entity"],
+      device: [
+        required: false,
+        type: :atom,
+        default: nil,
+        doc: "the nested device which the entity should be associcated with"
+      ]
     ]
   end
 
@@ -244,7 +250,8 @@ defmodule Homex.Entity do
 
   @impl GenServer
   def init(%__MODULE__{module: module} = entity) do
-    descriptor = Homex.Descriptor.put_unique_id(entity.descriptor, Homex.device())
+    descriptor =
+      Homex.Descriptor.put_unique_id(entity.descriptor, Homex.device())
 
     with {:ok, _pid} <-
            Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do

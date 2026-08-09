@@ -78,6 +78,7 @@ defmodule Homex.Entity.Sensor do
          module: __MODULE__,
          descriptor: %Homex.Descriptor{
            kind: :sensor,
+           device: opts[:device],
            fields: %{state: :state},
            name: opts[:name],
            options: %{

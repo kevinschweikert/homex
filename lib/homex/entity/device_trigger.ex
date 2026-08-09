@@ -98,6 +98,7 @@ defmodule Homex.Entity.DeviceTrigger do
          module: __MODULE__,
          descriptor: %Homex.Descriptor{
            kind: :device_trigger,
+           device: opts[:device],
            fields: %{trigger: :event},
            name: opts[:name],
            options: %{

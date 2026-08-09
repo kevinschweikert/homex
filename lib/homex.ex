@@ -21,6 +21,8 @@ defmodule Homex do
        keys: :unique,
        meta: [
          device: config.device,
+         devices: config.devices,
+         origin: config.origin,
          adapters: [{Homex.Adapter.MQTT, Homex.Adapter.MQTT}]
        ]},
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
@@ -100,21 +102,24 @@ defmodule Homex do
   def decode!(decodable), do: @json_library.decode!(decodable)
   def decode(decodable), do: @json_library.decode(decodable)
 
-  @doc "The running adapter instances as `{module, instance}` pairs"
-  def adapters() do
-    case Registry.meta(Homex.EntityRegistry, :adapters) do
-      {:ok, adapters} -> adapters
-      :error -> []
+  defp meta(key, default) do
+    case Registry.meta(Homex.EntityRegistry, key) do
+      {:ok, value} -> value
+      :error -> default
     end
   end
 
+  @doc "The running adapter instances as `{module, instance}` pairs"
+  def adapters(), do: meta(:adapters, [])
+
   @doc false
-  def device() do
-    case Registry.meta(Homex.EntityRegistry, :device) do
-      {:ok, device} -> device
-      :error -> %{}
-    end
-  end
+  def device(), do: meta(:device, %{})
+
+  @doc false
+  def devices(), do: meta(:devices, %{})
+
+  @doc false
+  def origin(), do: meta(:origin, %{})
 
   def descriptor(name) do
     case Registry.lookup(Homex.EntityRegistry, name) do
@@ -163,6 +168,24 @@ defmodule Homex do
   def add_entities(entities) do
     Enum.each(entities, &start_entity/1)
     notify_adapters()
+  end
+
+  def add_device(id, name) do
+    devices = meta(:devices, %{})
+
+    case Map.get(devices, id) do
+      nil ->
+        Registry.put_meta(
+          Homex.EntityRegistry,
+          :devices,
+          Map.merge(devices, %{id => %{name: name}})
+        )
+
+        notify_adapters()
+
+      _existing ->
+        {:error, :already_defined}
+    end
   end
 
   defp start_entity(spec) do
