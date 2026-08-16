@@ -20,7 +20,9 @@ defmodule Homex do
        name: Homex.EntityRegistry,
        keys: :unique,
        meta: [
-         device: config.device,
+         node_id: config.node_id,
+         devices: config.devices,
+         origin: config.origin,
          adapters: [{Homex.Adapter.MQTT, Homex.Adapter.MQTT}]
        ]},
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
@@ -41,7 +43,7 @@ defmodule Homex do
   there is no global state and no application environment involved:
 
   ```elixir
-  {Homex, broker: [host: "localhost", port: 1883], entities: [MyEntity]}
+  {Homex, node_id: Homex.hostname(), broker: [host: "localhost", port: 1883], entities: [MyEntity]}
   ```
 
   The available options are documented in `Homex.Config`.
@@ -83,7 +85,7 @@ defmodule Homex do
       children =
         [
           ...,
-          {Homex, entities: [MySwitch]},
+          {Homex, node_id: Homex.hostname(), entities: [MySwitch]},
           ...
         ]
 
@@ -100,21 +102,28 @@ defmodule Homex do
   def decode!(decodable), do: @json_library.decode!(decodable)
   def decode(decodable), do: @json_library.decode(decodable)
 
+  defp meta(key, default) do
+    case Registry.meta(Homex.EntityRegistry, key) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
   @doc "The running adapter instances as `{module, instance}` pairs"
-  def adapters() do
-    case Registry.meta(Homex.EntityRegistry, :adapters) do
-      {:ok, adapters} -> adapters
-      :error -> []
+  def adapters(), do: meta(:adapters, [])
+
+  def node_id() do
+    case meta(:node_id, nil) do
+      nil -> raise "node id must be set"
+      id -> id
     end
   end
 
   @doc false
-  def device() do
-    case Registry.meta(Homex.EntityRegistry, :device) do
-      {:ok, device} -> device
-      :error -> %{}
-    end
-  end
+  def devices(), do: meta(:devices, %{})
+
+  @doc false
+  def origin(), do: meta(:origin, %{})
 
   def descriptor(name) do
     case Registry.lookup(Homex.EntityRegistry, name) do
@@ -162,6 +171,35 @@ defmodule Homex do
 
   def add_entities(entities) do
     Enum.each(entities, &start_entity/1)
+    notify_adapters()
+  end
+
+  @doc """
+  Adds the device or replaces the one already registered under `id`.
+
+  See `Homex.Device` for the available options.
+  """
+  # ponytail: read-modify-write on the registry meta, concurrent callers can
+  # lose an update. Serialize through a process if devices ever get written
+  # from more than one place.
+  @spec put_device(Homex.Device.id(), keyword()) ::
+          :ok | {:error, NimbleOptions.ValidationError.t()}
+  def put_device(id, opts \\ []) do
+    with {:ok, device} <- Homex.Device.new(id, opts) do
+      Registry.put_meta(Homex.EntityRegistry, :devices, Map.put(devices(), id, device))
+      notify_adapters()
+    end
+  end
+
+  @doc """
+  Removes the device registered under `id`.
+
+  Entities on that device keep running but are no longer published, until a
+  device is registered under the same id again.
+  """
+  @spec delete_device(Homex.Device.id()) :: :ok
+  def delete_device(id) do
+    Registry.put_meta(Homex.EntityRegistry, :devices, Map.delete(devices(), id))
     notify_adapters()
   end
 

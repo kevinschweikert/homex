@@ -66,14 +66,6 @@ defmodule Homex.Entity.SwitchTest do
     assert_receive {:publish_state, _, %{state: false}}
   end
 
-  test "invalid use options fail at compile time" do
-    assert_raise NimbleOptions.ValidationError, fn ->
-      defmodule BadSwitch do
-        use Homex.Entity.Switch, name: 123
-      end
-    end
-  end
-
   test "unknown command maps are ignored" do
     Entity.send_command("test-switch", %{bogus: true})
     refute_receive {:publish_state, _, _}

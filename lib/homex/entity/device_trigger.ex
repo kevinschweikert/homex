@@ -90,25 +90,23 @@ defmodule Homex.Entity.DeviceTrigger do
   def handle_cast(_msg, entity), do: entity
 
   @impl Homex.Entity
-  def new(opts) do
-    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
-      {:ok,
-       %Entity{
-         name: opts[:name],
-         module: __MODULE__,
-         descriptor: %Homex.Descriptor{
-           kind: :device_trigger,
-           fields: %{trigger: :event},
-           name: opts[:name],
-           options: %{
-             type: opts[:type],
-             subtype: opts[:subtype],
-             payload: opts[:payload],
-             enabled_by_default: opts[:enabled_by_default]
-           }
-         }
-       }}
-    end
+  def validate(opts) do
+    NimbleOptions.validate(opts, @opts_schema)
+  end
+
+  @impl Homex.Entity
+  def describe(opts) do
+    %Homex.Descriptor{
+      kind: :device_trigger,
+      fields: %{trigger: :event},
+      name: opts[:name],
+      options: %{
+        type: opts[:type],
+        subtype: opts[:subtype],
+        payload: opts[:payload],
+        enabled_by_default: opts[:enabled_by_default]
+      }
+    }
   end
 
   @impl Homex.Entity

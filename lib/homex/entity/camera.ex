@@ -69,25 +69,23 @@ defmodule Homex.Entity.Camera do
   end
 
   @impl Homex.Entity
-  def new(opts) do
-    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
-      {:ok,
-       %Entity{
-         name: opts[:name],
-         module: __MODULE__,
-         descriptor: %Homex.Descriptor{
-           kind: :camera,
-           fields: %{image: :state, attrs: :state},
-           name: opts[:name],
-           options: %{
-             encoding: opts[:encoding],
-             image_encoding: opts[:image_encoding],
-             enabled_by_default: opts[:enabled_by_default]
-           },
-           transport: %{mqtt: [retain: opts[:retain]]}
-         }
-       }}
-    end
+  def validate(opts) do
+    NimbleOptions.validate(opts, @opts_schema)
+  end
+
+  @impl Homex.Entity
+  def describe(opts) do
+    %Homex.Descriptor{
+      kind: :camera,
+      fields: %{image: :state, attrs: :state},
+      name: opts[:name],
+      options: %{
+        encoding: opts[:encoding],
+        image_encoding: opts[:image_encoding],
+        enabled_by_default: opts[:enabled_by_default]
+      },
+      transport: %{mqtt: [retain: opts[:retain]]}
+    }
   end
 
   @impl Homex.Entity

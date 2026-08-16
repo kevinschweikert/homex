@@ -25,8 +25,11 @@ defmodule Homex.Entity do
   """
   use GenServer
 
-  @doc "Builds the entity struct from validated options"
-  @callback new(opts :: keyword()) :: {:ok, t()} | {:error, term()}
+  @doc "Validate the options give to this entity"
+  @callback validate(opts :: keyword()) :: {:ok, opts :: keyword()} | {:error, term()}
+
+  @doc "Describes the entity from validated options"
+  @callback describe(opts :: keyword()) :: Homex.Descriptor.t()
 
   @doc """
   Configures the initial state for the entity
@@ -36,7 +39,6 @@ defmodule Homex.Entity do
   @callback handle_command(cmd :: map(), entity :: t()) :: entity :: t()
 
   @type t() :: %__MODULE__{
-          name: term(),
           module: module() | nil,
           values: map(),
           changes: map(),
@@ -45,7 +47,6 @@ defmodule Homex.Entity do
         }
 
   defstruct [
-    :name,
     :module,
     :descriptor,
     values: %{},
@@ -57,6 +58,7 @@ defmodule Homex.Entity do
   defmacro __using__(_opts) do
     quote do
       @behaviour Homex.Entity
+      def new(opts), do: Homex.Entity.__new__(__MODULE__, __MODULE__, opts)
 
       @doc "Gets called after the entity started"
       @callback handle_init(entity :: Homex.Entity.t()) :: Homex.Entity.t()
@@ -89,28 +91,27 @@ defmodule Homex.Entity do
   callbacks. A kind adds its own hook defaults (e.g. `handle_on/1`) alongside.
   """
   def __entity__(kind, using_opts, imports \\ []) do
-    if Macro.quoted_literal?(using_opts) do
-      with {:error, error} <- kind.new(using_opts), do: raise(error)
-    end
-
     quote generated: true do
       @behaviour unquote(kind)
+
+      @doc false
+      def __homex_entity__, do: true
 
       import unquote(kind), only: unquote(imports)
       import Homex.Entity, only: [put_private: 3, get_private: 2]
       alias Homex.Entity
 
       def new(opts \\ []) do
-        with {:ok, entity} <- unquote(kind).new(Keyword.merge(unquote(using_opts), opts)) do
-          {:ok, %{entity | module: __MODULE__}}
-        end
+        Homex.Entity.__new__(
+          unquote(kind),
+          __MODULE__,
+          Keyword.merge(unquote(using_opts), opts)
+        )
       end
 
+      defdelegate validate(opts), to: unquote(kind)
       defdelegate setup(entity), to: unquote(kind)
       defdelegate handle_command(cmd, entity), to: unquote(kind)
-
-      @doc false
-      def __homex_entity__, do: true
 
       # Overridable defaults so every callback resolves to a real function (no
       # reflection at dispatch) and overrides can chain with super/1.
@@ -135,10 +136,10 @@ defmodule Homex.Entity do
   """
   @spec new(t() | {module(), keyword()} | module()) :: {:ok, t()} | {:error, term()}
   def new(%__MODULE__{} = entity), do: {:ok, entity}
-  def new({module, opts}) when is_atom(module) and is_list(opts), do: build(module, opts)
-  def new(module) when is_atom(module), do: build(module, [])
+  def new({module, opts}) when is_atom(module) and is_list(opts), do: from_module(module, opts)
+  def new(module) when is_atom(module), do: from_module(module, [])
 
-  defp build(module, opts) do
+  defp from_module(module, opts) do
     cond do
       not (Code.ensure_loaded?(module) and function_exported?(module, :new, 1)) ->
         {:error, :entity_invalid}
@@ -151,6 +152,14 @@ defmodule Homex.Entity do
 
       true ->
         module.new(opts)
+    end
+  end
+
+  @doc false
+  def __new__(kind, module, opts) do
+    with {:ok, validated} <- kind.validate(opts) do
+      descriptor = %{kind.describe(validated) | device: validated[:device]}
+      {:ok, %__MODULE__{module: module, descriptor: descriptor}}
     end
   end
 
@@ -184,7 +193,13 @@ defmodule Homex.Entity do
   @doc false
   def base_opts_schema do
     [
-      name: [required: true, type: :string, doc: "the name of the entity"]
+      name: [required: true, type: :string, doc: "the name of the entity"],
+      device: [
+        required: false,
+        type: :atom,
+        default: :default,
+        doc: "the id of the device this entity belongs to"
+      ]
     ]
   end
 
@@ -234,7 +249,7 @@ defmodule Homex.Entity do
 
   def child_spec(%__MODULE__{} = entity) do
     %{
-      id: {__MODULE__, entity.name},
+      id: {__MODULE__, entity.descriptor.name},
       start: {__MODULE__, :start_link, [entity]},
       restart: :transient
     }
@@ -244,7 +259,8 @@ defmodule Homex.Entity do
 
   @impl GenServer
   def init(%__MODULE__{module: module} = entity) do
-    descriptor = Homex.Descriptor.put_unique_id(entity.descriptor, Homex.device())
+    descriptor =
+      Homex.Descriptor.put_unique_id(entity.descriptor, Homex.node_id())
 
     with {:ok, _pid} <-
            Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do

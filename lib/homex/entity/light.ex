@@ -79,28 +79,26 @@ defmodule Homex.Entity.Light do
   end
 
   @impl Homex.Entity
-  def new(opts) do
-    with {:ok, opts} <- NimbleOptions.validate(opts, @opts_schema) do
-      modes = opts[:modes]
+  def validate(opts) do
+    NimbleOptions.validate(opts, @opts_schema)
+  end
 
-      fields =
-        if :brightness in modes,
-          do: %{state: :state, brightness: :state},
-          else: %{state: :state}
+  @impl Homex.Entity
+  def describe(opts) do
+    modes = opts[:modes]
 
-      {:ok,
-       %Entity{
-         name: opts[:name],
-         module: __MODULE__,
-         descriptor: %Homex.Descriptor{
-           kind: :light,
-           fields: fields,
-           name: opts[:name],
-           options: %{modes: modes},
-           transport: %{mqtt: [retain: opts[:retain]]}
-         }
-       }}
-    end
+    fields =
+      if :brightness in modes,
+        do: %{state: :state, brightness: :state},
+        else: %{state: :state}
+
+    %Homex.Descriptor{
+      kind: :light,
+      fields: fields,
+      name: opts[:name],
+      options: %{modes: modes},
+      transport: %{mqtt: [retain: opts[:retain]]}
+    }
   end
 
   @impl Homex.Entity
