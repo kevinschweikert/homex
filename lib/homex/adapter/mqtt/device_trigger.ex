@@ -25,6 +25,8 @@ defmodule Homex.Adapter.MQTT.DeviceTrigger do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(desc, topics, %{trigger: true}), do: [{topics.action, desc.options[:payload]}]
-  def publish(_desc, _topics, _changes), do: []
+  def publish(desc, topics, _values, %{trigger: true}),
+    do: [{topics.action, desc.options[:payload]}]
+
+  def publish(_desc, _topics, _values, _changes), do: []
 end

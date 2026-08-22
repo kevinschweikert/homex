@@ -233,13 +233,15 @@ defmodule Homex.Entity do
         {key, value}
       end
 
+    values = Map.merge(values, diff)
+
     if map_size(diff) != 0 do
       for {module, instance} <- Homex.adapters() do
-        module.publish_state(instance, entity.descriptor, diff)
+        module.publish_state(instance, entity.descriptor, values, diff)
       end
     end
 
-    %{entity | changes: %{}, values: Map.merge(values, diff)}
+    %{entity | changes: %{}, values: values}
   end
 
   ## Process lifecycle

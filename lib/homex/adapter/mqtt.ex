@@ -38,8 +38,8 @@ defmodule Homex.Adapter.MQTT do
   end
 
   @impl Homex.Adapter
-  def publish_state(instance, %Homex.Descriptor{} = descriptor, changes) do
-    GenServer.cast(instance, {:publish_state, descriptor, changes})
+  def publish_state(instance, %Homex.Descriptor{} = descriptor, values, changes) do
+    GenServer.cast(instance, {:publish_state, descriptor, values, changes})
   end
 
   @impl Homex.Adapter
@@ -265,14 +265,14 @@ defmodule Homex.Adapter.MQTT do
 
   @impl GenServer
   def handle_cast(
-        {:publish_state, %Homex.Descriptor{} = descriptor, changes},
+        {:publish_state, %Homex.Descriptor{} = descriptor, values, changes},
         %__MODULE__{node_id: node_id, emqtt_pid: emqtt_pid, connected: true} = state
       )
       when not is_nil(emqtt_pid) do
     if resolved = resolve(node_id, descriptor) do
       opts = [retain: descriptor.transport[:mqtt][:retain]]
 
-      for {topic, payload} <- resolved.mod.publish(descriptor, resolved.topics, changes) do
+      for {topic, payload} <- resolved.mod.publish(descriptor, resolved.topics, values, changes) do
         with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
           Logger.debug("published #{inspect(payload)} to #{inspect(topic)}")
         end

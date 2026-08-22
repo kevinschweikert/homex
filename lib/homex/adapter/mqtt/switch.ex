@@ -29,7 +29,7 @@ defmodule Homex.Adapter.MQTT.Switch do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(_desc, topics, %{state: true}), do: [{topics.state, @on_payload}]
-  def publish(_desc, topics, %{state: false}), do: [{topics.state, @off_payload}]
-  def publish(_desc, _topics, _changes), do: []
+  def publish(_desc, topics, %{state: true}, _changes), do: [{topics.state, @on_payload}]
+  def publish(_desc, topics, %{state: false}, _changes), do: [{topics.state, @off_payload}]
+  def publish(_desc, _topics, _values, _changes), do: []
 end
