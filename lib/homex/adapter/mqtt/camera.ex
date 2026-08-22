@@ -2,16 +2,16 @@ defmodule Homex.Adapter.MQTT.Camera do
   @moduledoc false
   @behaviour Homex.Adapter.MQTT.Platform
 
-  alias Homex.Adapter.MQTT
+  @impl Homex.Adapter.MQTT.Platform
+  def segments(_desc), do: %{image: [], attributes: ["attributes"]}
 
   @impl Homex.Adapter.MQTT.Platform
-  def component(desc) do
+  def component(desc, topics) do
     %{
       platform: "camera",
-      topic: topic(desc),
-      json_attributes_topic: attributes_topic(desc),
+      topic: topics.image,
+      json_attributes_topic: topics.attributes,
       name: desc.name,
-      unique_id: desc.unique_id,
       encoding: desc.options[:encoding],
       image_encoding: desc.options[:image_encoding],
       enabled_by_default: desc.options[:enabled_by_default]
@@ -19,20 +19,17 @@ defmodule Homex.Adapter.MQTT.Camera do
   end
 
   @impl Homex.Adapter.MQTT.Platform
-  def subscriptions(_desc), do: []
+  def subscriptions(_desc, _topics), do: []
 
   @impl Homex.Adapter.MQTT.Platform
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(desc, changes) do
+  def publish(_desc, topics, changes) do
     Enum.flat_map(changes, fn
-      {:image, image} -> [{topic(desc), image}]
-      {:attrs, attrs} -> [{attributes_topic(desc), Homex.encode!(attrs)}]
+      {:image, image} -> [{topics.image, image}]
+      {:attrs, attrs} -> [{topics.attributes, Homex.encode!(attrs)}]
       _ -> []
     end)
   end
-
-  defp topic(desc), do: MQTT.topic(desc)
-  defp attributes_topic(desc), do: MQTT.topic(desc, ["attributes"])
 end

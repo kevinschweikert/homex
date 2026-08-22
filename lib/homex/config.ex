@@ -1,5 +1,8 @@
 defmodule Homex.Config do
   @config_schema [
+                   # TODO: rethink if node_id is really the best name
+                   # the node as a concept is already in OTP
+                   # maybe instance_id?
                    node_id: [
                      required: true,
                      type: :string,

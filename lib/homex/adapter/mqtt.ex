@@ -4,7 +4,7 @@ defmodule Homex.Adapter.MQTT do
 
   require Logger
 
-  alias Homex.Adapter.MQTT.{Button, Camera, DeviceTrigger, Light, Sensor, Switch}
+  alias Homex.Adapter.MQTT.{Button, Camera, DeviceTrigger, Light, Sensor, Switch, Util}
 
   @platforms %{
     switch: Switch,
@@ -38,49 +38,36 @@ defmodule Homex.Adapter.MQTT do
   end
 
   @impl Homex.Adapter
-  def publish_state(instance, %Homex.Descriptor{kind: kind} = desc, changes) do
-    case @platforms[kind] do
-      nil ->
-        :ok
-
-      mod ->
-        for {topic, payload} <- mod.publish(desc, changes) do
-          GenServer.cast(
-            instance,
-            {:publish, topic, payload, retain: desc.transport[:mqtt][:retain]}
-          )
-        end
-
-        :ok
-    end
+  def publish_state(instance, %Homex.Descriptor{} = descriptor, changes) do
+    GenServer.cast(instance, {:publish_state, descriptor, changes})
   end
 
   @impl Homex.Adapter
   def entities_changed(instance), do: GenServer.cast(instance, :entities_changed)
 
-  def component(%Homex.Descriptor{kind: kind} = desc) do
-    case @platforms[kind] do
-      nil -> :unsupported
-      mod -> {:ok, desc |> mod.component() |> Map.reject(fn {_key, val} -> is_nil(val) end)}
+  def normalize(%Homex.Descriptor{} = descriptor, payload) do
+    if mod = platform(descriptor), do: mod.normalize(payload)
+  end
+
+  defp platform(%Homex.Descriptor{kind: kind}), do: @platforms[kind]
+
+  # Everything a platform needs for one descriptor. `nil` for an unknown kind, so
+  # the callers can use it as a filter.
+  defp resolve(node_id, %Homex.Descriptor{} = descriptor) do
+    if mod = platform(descriptor) do
+      {identifier, topic_builder} = Util.identity(node_id, descriptor)
+
+      topics =
+        Map.new(mod.segments(descriptor), fn {key, segments} ->
+          {key, topic_builder.(segments)}
+        end)
+
+      %{mod: mod, identifier: identifier, topics: topics}
     end
   end
 
-  def subscriptions(%Homex.Descriptor{kind: kind} = desc) do
-    case @platforms[kind] do
-      nil -> []
-      mod -> mod.subscriptions(desc)
-    end
-  end
-
-  def normalize(%Homex.Descriptor{kind: kind}, payload) do
-    case @platforms[kind] do
-      nil -> nil
-      mod -> mod.normalize(payload)
-    end
-  end
-
-  def topic(%Homex.Descriptor{kind: kind, unique_id: unique_id}, suffix \\ []),
-    do: Enum.join(["homex", kind, unique_id | suffix], "/")
+  # Home Assistant reads an explicit null as a value, so empty keys are dropped
+  defp compact(map), do: Map.reject(map, fn {_key, val} -> is_nil(val) end)
 
   @type qos() :: 0 | 1 | 2
 
@@ -100,7 +87,7 @@ defmodule Homex.Adapter.MQTT do
      %__MODULE__{
        emqtt_opts: config.broker,
        discovery_prefix: config.discovery_prefix,
-       node_id: Homex.slug(config.node_id)
+       node_id: config.node_id
      }, {:continue, :connect}}
   end
 
@@ -165,8 +152,8 @@ defmodule Homex.Adapter.MQTT do
         old_state = Map.get(old_devices, device_id, %DeviceState{})
 
         new_state = %DeviceState{
-          components: build_components(entries),
-          subscriptions: build_subscriptions(entries)
+          components: build_components(node_id, entries),
+          subscriptions: build_subscriptions(node_id, entries)
         }
 
         for topic <- Map.keys(new_state.subscriptions) -- Map.keys(old_state.subscriptions) do
@@ -210,25 +197,28 @@ defmodule Homex.Adapter.MQTT do
     {:noreply, %{state | subscriptions: subscriptions, devices: devices}}
   end
 
-  defp build_components(entries) do
-    entries
-    |> Enum.reduce(%{}, fn descriptor, acc ->
-      case component(descriptor) do
-        :unsupported -> acc
-        {:ok, comp} -> Map.put(acc, descriptor.unique_id, comp)
-      end
-    end)
-  end
+  defp build_components(node_id, entries) do
+    for descriptor <- entries, resolved = resolve(node_id, descriptor), into: %{} do
+      %{mod: mod, identifier: identifier, topics: topics} = resolved
 
-  defp build_subscriptions(entries) do
-    for descriptor <- entries, topic <- subscriptions(descriptor), into: %{} do
-      {topic, descriptor}
+      component =
+        descriptor
+        |> mod.component(topics)
+        |> Map.put(:unique_id, identifier)
+        |> compact()
+
+      {identifier, component}
     end
   end
 
-  # HA identifies a device by its identifiers, so they are scoped by the node id —
-  # unique per homex instance, stable across renames of the device itself.
-  defp identifier(node_id, %Homex.Device{id: id}), do: "homex-#{node_id}-#{id}"
+  defp build_subscriptions(node_id, entries) do
+    for descriptor <- entries,
+        resolved = resolve(node_id, descriptor),
+        topic <- resolved.mod.subscriptions(descriptor, resolved.topics),
+        into: %{} do
+      {topic, descriptor}
+    end
+  end
 
   @doc false
   @spec device_config(String.t(), %{Homex.Device.id() => Homex.Device.t()}, Homex.Device.t()) ::
@@ -236,7 +226,7 @@ defmodule Homex.Adapter.MQTT do
   def device_config(node_id, devices, %Homex.Device{} = device) do
     %{
       name: device.name,
-      identifiers: [identifier(node_id, device)],
+      identifiers: [Util.device_identifier(node_id, device)],
       manufacturer: device.manufacturer,
       model: device.model,
       serial_number: device.serial_number,
@@ -244,7 +234,7 @@ defmodule Homex.Adapter.MQTT do
       hw_version: device.hw_version,
       via_device: build_via_device(node_id, devices, device)
     }
-    |> Map.reject(fn {_key, val} -> is_nil(val) end)
+    |> compact()
   end
 
   defp build_via_device(_node_id, _devices, %Homex.Device{via: nil}), do: nil
@@ -252,7 +242,7 @@ defmodule Homex.Adapter.MQTT do
   defp build_via_device(node_id, devices, %Homex.Device{via: via}) do
     case Map.fetch(devices, via) do
       {:ok, parent} ->
-        identifier(node_id, parent)
+        Util.device_identifier(node_id, parent)
 
       :error ->
         Logger.warning("device #{inspect(via)} referenced by :via is not defined, ignoring")
@@ -275,12 +265,18 @@ defmodule Homex.Adapter.MQTT do
 
   @impl GenServer
   def handle_cast(
-        {:publish, topic, payload, opts},
-        %__MODULE__{emqtt_pid: emqtt_pid, connected: true} = state
+        {:publish_state, %Homex.Descriptor{} = descriptor, changes},
+        %__MODULE__{node_id: node_id, emqtt_pid: emqtt_pid, connected: true} = state
       )
       when not is_nil(emqtt_pid) do
-    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
-      Logger.debug("published #{inspect(payload)} to #{inspect(topic)}")
+    if resolved = resolve(node_id, descriptor) do
+      opts = [retain: descriptor.transport[:mqtt][:retain]]
+
+      for {topic, payload} <- resolved.mod.publish(descriptor, resolved.topics, changes) do
+        with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
+          Logger.debug("published #{inspect(payload)} to #{inspect(topic)}")
+        end
+      end
     end
 
     {:noreply, state}
@@ -302,7 +298,7 @@ defmodule Homex.Adapter.MQTT do
       ) do
     Logger.debug("Received #{inspect(payload)} from #{inspect(topic)}")
 
-    # will only yield one descriptor per topic because the topic includes the unique id
+    # will only yield one descriptor per topic because the topic includes the identifier
     with %Homex.Descriptor{} = descriptor <- subscriptions[topic],
          command when not is_nil(command) <- normalize(descriptor, payload) do
       Homex.Entity.send_command(descriptor.name, command)

@@ -237,11 +237,4 @@ defmodule Homex do
       _ -> "homex"
     end
   end
-
-  def slug(binary) when is_binary(binary) do
-    binary
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "_")
-    |> String.trim("_")
-  end
 end
