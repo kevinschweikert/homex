@@ -163,8 +163,13 @@ defmodule Homex.Entity do
     end
   end
 
-  @doc "The current values of the entity"
-  def snapshot(name), do: Homex.call(name, {:homex, :snapshot})
+  @doc "The current values of the entity, or `nil` when it is no longer running"
+  def snapshot(name) do
+    case Homex.call(name, {:homex, :snapshot}) do
+      %{} = values -> values
+      {:error, :not_found} -> nil
+    end
+  end
 
   @doc "Delivers a command map to the entity"
   def send_command(name, cmd) do

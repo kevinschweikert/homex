@@ -36,7 +36,7 @@ defmodule Homex.Adapter.MQTT.UtilTest do
     spaced = %{@prod | name: "living room"}
     dashed = %{@prod | name: "living-room"}
 
-    assert Util.slug(spaced.name) == Util.slug(dashed.name)
+    assert Homex.Util.slug(spaced.name) == Homex.Util.slug(dashed.name)
 
     refute Util.component_identifier("node", spaced) ==
              Util.component_identifier("node", dashed)

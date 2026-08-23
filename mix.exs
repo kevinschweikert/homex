@@ -70,6 +70,9 @@ defmodule Homex.MixProject do
         MQTT: [
           Homex.Adapter.MQTT,
           Homex.Adapter.MQTT.Util
+        ],
+        ESPHome: [
+          Homex.Adapter.ESPHome
         ]
       ]
     ]
@@ -78,12 +81,13 @@ defmodule Homex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:nimble_options, "~> 1.1"},
       {:emqtt, "~> 1.14.7", optional: true},
-      {:ex_doc, "~> 0.38", only: :docs},
       {:jason, "~> 1.4", optional: true},
       {:kino, "~> 0.19", optional: true},
-      {:nimble_options, "~> 1.1"}
+      {:espex, "~> 0.9.0", optional: true},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.38", only: :docs}
     ]
   end
 end

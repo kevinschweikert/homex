@@ -40,6 +40,7 @@ defmodule Homex.Livebook.Kind do
   end
 
   defp fields(nil, _descriptor, values, _changes), do: %{sub: attributes(values) || "no state"}
+  defp fields(_module, _descriptor, nil, _changes), do: %{sub: "no state"}
   defp fields(module, descriptor, values, changes), do: module.card(descriptor, values, changes)
 
   @doc "Renders a value the way a readout should look"

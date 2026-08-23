@@ -173,9 +173,19 @@ defmodule Homex do
 
   def call(name, msg) do
     case Registry.lookup(Homex.EntityRegistry, name) do
-      [{pid, _value}] -> GenServer.call(pid, msg)
+      [{pid, _value}] -> call_entity(pid, msg)
       _ -> {:error, :not_found}
     end
+  end
+
+  # an entity can exit between the lookup and the call, which reads the same to the
+  # caller as a name that was never registered. A timeout still raises: that is an
+  # entity that is stuck, not one that is gone
+  defp call_entity(pid, msg) do
+    GenServer.call(pid, msg)
+  catch
+    :exit, {reason, {GenServer, :call, [^pid | _]}} when reason != :timeout ->
+      {:error, :not_found}
   end
 
   def subscribe, do: Registry.register(Homex.Subscribers, :entities, nil)
@@ -203,6 +213,9 @@ defmodule Homex do
     start_adapter(opts)
   end
 
+  # TODO: start_adapter/1 can return {:error, reason} (DynamicSupervisor.start_child
+  # catches the child's crash instead of raising) and Enum.each discards it silently —
+  # a broken adapter currently boots as if nothing happened. Surface/log the failure.
   def add_adapters(adapters) do
     Enum.each(adapters, &start_adapter/1)
   end
