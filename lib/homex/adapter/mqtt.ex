@@ -1,6 +1,53 @@
 defmodule Homex.Adapter.MQTT do
+  @options_schema [
+                    discovery_prefix: [
+                      required: false,
+                      type: :string,
+                      default: "homeassistant",
+                      doc:
+                        "if changed in Homeassistant you also need to change it here to enable autodiscovery. The default works for a standard installation"
+                    ],
+                    broker: [
+                      required: false,
+                      default: [],
+                      type: :keyword_list,
+                      keys: [
+                        host: [
+                          type: :string,
+                          default: "localhost",
+                          doc: "host of the MQTT broker"
+                        ],
+                        port: [type: :integer, default: 1883, doc: "port of the MQTT broker"],
+                        username: [type: :string, doc: "username for the MQTT broker"],
+                        password: [type: :string, doc: "passwort for the MQTT broker"]
+                      ]
+                    ],
+                    client_opts: [
+                      required: false,
+                      default: [],
+                      type: :keyword_list,
+                      doc:
+                        "passed to the MQTT client untouched and merged last, so it can override anything derived from `:broker`. Unvalidated — the accepted keys are the client's, not homex's"
+                    ]
+                  ]
+                  |> NimbleOptions.new!()
+
+  @moduledoc """
+  Home Assistant MQTT discovery transport.
+
+  Start it from the `:adapters` option of `Homex`:
+
+      {Homex,
+       node_id: Homex.hostname(),
+       adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
+       entities: [MySwitch]}
+
+  ## Options
+
+  #{NimbleOptions.docs(@options_schema)}
+  """
+
   use GenServer
-  @behaviour Homex.Adapter
 
   require Logger
 
@@ -33,17 +80,11 @@ defmodule Homex.Adapter.MQTT do
     defstruct components: %{}, subscriptions: %{}, topic: nil
   end
 
-  def start_link(%Homex.Config{} = config) do
-    GenServer.start_link(__MODULE__, config, name: __MODULE__)
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, NimbleOptions.validate!(opts, @options_schema),
+      name: __MODULE__
+    )
   end
-
-  @impl Homex.Adapter
-  def publish_state(instance, %Homex.Descriptor{} = descriptor, values, changes) do
-    GenServer.cast(instance, {:publish_state, descriptor, values, changes})
-  end
-
-  @impl Homex.Adapter
-  def entities_changed(instance), do: GenServer.cast(instance, :entities_changed)
 
   def normalize(%Homex.Descriptor{} = descriptor, payload) do
     if mod = platform(descriptor), do: mod.normalize(payload)
@@ -79,17 +120,35 @@ defmodule Homex.Adapter.MQTT do
   def connected?, do: GenServer.call(__MODULE__, :is_connected)
 
   @impl GenServer
-  def init(config) do
+  def init(opts) do
     Logger.put_application_level(:emqtt, :info)
     Process.flag(:trap_exit, true)
+    Homex.subscribe()
 
     {:ok,
      %__MODULE__{
-       emqtt_opts: config.broker,
-       discovery_prefix: config.discovery_prefix,
-       node_id: config.node_id
+       emqtt_opts: emqtt_opts(opts[:broker], opts[:client_opts]),
+       discovery_prefix: opts[:discovery_prefix],
+       node_id: Homex.node_id()
      }, {:continue, :connect}}
   end
+
+  # TODO: the charlist translation is emqtt's, not MQTT-the-protocol's. Move it
+  # into the client wrapper once the client is swappable (#48).
+  defp emqtt_opts(broker, client_opts) do
+    [
+      name: Homex.EMQTT,
+      host: String.to_charlist(broker[:host]),
+      port: broker[:port],
+      username: optional(broker[:username], &String.to_charlist/1),
+      password: optional(broker[:password], &String.to_charlist/1)
+    ]
+    |> Keyword.reject(fn {_key, val} -> is_nil(val) end)
+    |> Keyword.merge(client_opts)
+  end
+
+  defp optional(nil, _), do: nil
+  defp optional(val, transformer), do: transformer.(val)
 
   @impl GenServer
   def handle_continue(:connect, %__MODULE__{emqtt_opts: emqtt_opts} = state) do
@@ -264,8 +323,8 @@ defmodule Homex.Adapter.MQTT do
   end
 
   @impl GenServer
-  def handle_cast(
-        {:publish_state, %Homex.Descriptor{} = descriptor, values, changes},
+  def handle_info(
+        {:homex, :state, %Homex.Descriptor{} = descriptor, values, changes},
         %__MODULE__{node_id: node_id, emqtt_pid: emqtt_pid, connected: true} = state
       )
       when not is_nil(emqtt_pid) do
@@ -282,16 +341,13 @@ defmodule Homex.Adapter.MQTT do
     {:noreply, state}
   end
 
-  def handle_cast(:entities_changed, state) do
+  def handle_info({:homex, :state, _, _, _}, state), do: {:noreply, state}
+
+  def handle_info({:homex, :entities_changed}, state) do
     {:noreply, state, {:continue, :publish_discovery_config}}
   end
 
-  def handle_cast(_, %__MODULE__{connected: false} = state) do
-    {:noreply, state}
-  end
-
   # new MQTT message from broker
-  @impl GenServer
   def handle_info(
         {:publish, %{topic: topic, payload: payload}},
         %__MODULE__{subscriptions: subscriptions} = state

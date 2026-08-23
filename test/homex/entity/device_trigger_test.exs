@@ -18,10 +18,10 @@ defmodule Homex.Entity.DeviceTriggerTest do
 
   test "firing twice in a row publishes both times" do
     Homex.Entity.DeviceTrigger.trigger("test-trigger")
-    assert_receive {:publish_state, %Descriptor{kind: :device_trigger}, %{trigger: true}}
+    assert_receive {:homex, :state, %Descriptor{kind: :device_trigger}, _, %{trigger: true}}
 
     Homex.Entity.DeviceTrigger.trigger("test-trigger")
-    assert_receive {:publish_state, _, %{trigger: true}}
+    assert_receive {:homex, :state, _, _, %{trigger: true}}
   end
 
   test "runs bare, without a use-based module" do
@@ -29,7 +29,7 @@ defmodule Homex.Entity.DeviceTriggerTest do
     start_supervised!({Entity, entity}, id: :bare)
 
     Homex.Entity.DeviceTrigger.trigger("bare-trigger")
-    assert_receive {:publish_state, %Descriptor{kind: :device_trigger}, %{trigger: true}}
+    assert_receive {:homex, :state, %Descriptor{kind: :device_trigger}, _, %{trigger: true}}
   end
 
   describe "handle_command/2" do

@@ -29,7 +29,9 @@ defmodule Homex.Entity.ButtonTest do
   test "a press command fires handle_press every time" do
     Entity.send_command("test-button", %{pressed: true})
     assert_receive :pressed
-    assert_receive {:publish_state, %Descriptor{kind: :button}, %{attrs: %{count: 1}}}
+
+    assert_receive {:homex, :state, %Descriptor{kind: :button}, _,
+                    %{pressed: true, attrs: %{count: 1}}}
 
     Entity.send_command("test-button", %{pressed: true})
     assert_receive :pressed
@@ -61,9 +63,11 @@ defmodule Homex.Entity.ButtonTest do
       assert Entity.get_private(entity, :pressed?)
     end
 
-    test "leaves the entity untouched without user callbacks" do
+    test "records the press without user callbacks" do
       {:ok, entity} = SimpleButton.new(name: "fn-button")
-      assert Button.handle_command(%{pressed: true}, entity) == entity
+
+      assert Button.handle_command(%{pressed: true}, entity) ==
+               %{entity | changes: %{pressed: true}}
     end
   end
 end

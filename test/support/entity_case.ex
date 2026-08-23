@@ -1,8 +1,12 @@
 defmodule Homex.EntityCase do
   @moduledoc """
-  Test case for entity tests: attaches the test process to the shared test
-  adapter (started in `test_helper.exs`) to receive `{:publish_state, _, _}`
-  messages from entities started by this test.
+  Test case for entity tests: subscribes the test process so it receives
+  `{:homex, :state, descriptor, values, changes}` and
+  `{:homex, :entities_changed}`.
+
+  There is one global topic, so an `async: true` module sees the broadcasts of
+  every other module running at the same time. Match on the descriptor name in
+  `refute_receive`, or set `async: false` when the message carries no name.
   """
   use ExUnit.CaseTemplate
 
@@ -13,7 +17,7 @@ defmodule Homex.EntityCase do
   end
 
   setup do
-    Homex.Adapter.Test.attach()
+    Homex.subscribe()
     :ok
   end
 end

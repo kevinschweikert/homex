@@ -30,7 +30,7 @@ defmodule Homex.EntityTest do
         |> Entity.put_change(:state, true)
         |> Entity.execute_change()
 
-      assert_receive {:publish_state, %Descriptor{kind: :switch}, %{state: true}}
+      assert_receive {:homex, :state, %Descriptor{kind: :switch}, _, %{state: true}}
       assert entity.values == %{state: true}
       assert entity.changes == %{}
     end
@@ -41,11 +41,11 @@ defmodule Homex.EntityTest do
         |> Entity.put_change(:state, true)
         |> Entity.execute_change()
 
-      assert_receive {:publish_state, _, %{state: true}}
+      assert_receive {:homex, :state, _, _, %{state: true}}
 
       entity |> Entity.put_change(:state, true) |> Entity.execute_change()
 
-      refute_receive {:publish_state, _, _}
+      refute_receive {:homex, :state, %Descriptor{name: :test}, _, _}
     end
 
     test "existing values stay untouched" do
@@ -109,7 +109,7 @@ defmodule Homex.EntityTest do
       assert {:ok, %Descriptor{name: "second-switch"}} = Homex.descriptor("second-switch")
 
       Entity.send_command("second-switch", %{state: true})
-      assert_receive {:publish_state, %Descriptor{name: "second-switch"}, %{state: true}}
+      assert_receive {:homex, :state, %Descriptor{name: "second-switch"}, _, %{state: true}}
     end
   end
 end

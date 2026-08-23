@@ -236,9 +236,7 @@ defmodule Homex.Entity do
     values = Map.merge(values, diff)
 
     if map_size(diff) != 0 do
-      for {module, instance} <- Homex.adapters() do
-        module.publish_state(instance, entity.descriptor, values, diff)
-      end
+      Homex.broadcast({:homex, :state, entity.descriptor, values, diff})
     end
 
     %{entity | changes: %{}, values: values}

@@ -58,18 +58,10 @@ defmodule MySwitch do
 end
 ```
 
-Configure broker and entities. See `Homex.Config` module docs for options.
-Entities can also be added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_entity/1`.
-
-```elixir
-import Config
-
-config :homex,
-  broker: [host: "localhost", port: 1883, username: "admin", password: "admin"],
-  entities: [MySwitch]
-```
-
-Add `homex` to you supervision tree
+Add `homex` to your supervision tree with your adapters and entities. See the
+`Homex.Config` module docs for the available options, and `Homex.Adapter.MQTT`
+for the broker settings. Entities can also be added/removed at runtime with
+`Homex.add_entity/1` or `Homex.remove_entity/1`.
 
 ```elixir
 defmodule MyApp.Application do
@@ -78,7 +70,13 @@ defmodule MyApp.Application do
     children =
       [
         ...,
-        Homex,
+        {Homex,
+         node_id: Homex.hostname(),
+         adapters: [
+           {Homex.Adapter.MQTT,
+            broker: [host: "localhost", port: 1883, username: "admin", password: "admin"]}
+         ],
+         entities: [MySwitch]},
         ...
       ]
 
