@@ -3,31 +3,35 @@
 ```elixir
 Mix.install([
   {:homex, path: __DIR__},
-  {:req, "~> 0.6.2"}
+  {:req, "~> 0.6.2"},
+  {:kino, "~> 0.19.0"}
 ])
 ```
 
 ## Homex
 
 ```elixir
+Logger.put_process_level(self(), :info)
+```
+
+```elixir
 defmodule MySwitch do
-  use Homex.Entity.Switch, name: "my-switch"
+  use Homex.Entity.Switch, name: "Pump Relay"
 
   def handle_on(entity) do
-    IO.puts("Switch turned on")
+    IO.puts("Relay turned on")
     entity
   end
 
   def handle_off(entity) do
-    IO.puts("Switch turned off")
+    IO.puts("Relay turned off")
     entity
   end
 end
 
 defmodule MyTemperature do
   use Homex.Entity.Sensor,
-    device: :nested,
-    name: "my-temperature",
+    name: "Outside Temperature",
     unit_of_measurement: "°C",
     device_class: "temperature"
 
@@ -43,7 +47,7 @@ end
 
 defmodule MyHumidity do
   use Homex.Entity.Sensor,
-    name: "my-humidiy",
+    name: "Outside Humidity",
     unit_of_measurement: "%",
     device_class: "humidity"
 
@@ -58,7 +62,7 @@ defmodule MyHumidity do
 end
 
 defmodule MyButton do
-  use Homex.Entity.Button, name: "my-button"
+  use Homex.Entity.Button, name: "Open Door"
 
   def handle_press(entity) do
     IO.puts("my button was pressed")
@@ -67,7 +71,7 @@ defmodule MyButton do
 end
 
 defmodule MyLight do
-  use Homex.Entity.Light, name: "my-light", modes: [:brightness]
+  use Homex.Entity.Light, name: "Lava Lamp", modes: [:brightness]
 
   def handle_init(entity) do
     entity |> set_on() |> set_brightness(50)
@@ -80,11 +84,11 @@ defmodule MyLight do
 end
 
 defmodule MyDevice do
-  use Homex.Entity.DeviceTrigger, name: "my-device-trigger"
+  use Homex.Entity.DeviceTrigger, name: "Door Opened"
 end
 
 defmodule MyCamera do
-  use Homex.Entity.Camera, name: "my-camera"
+  use Homex.Entity.Camera, name: "Front Door Surveillance"
 
   def handle_init(entity) do
     :timer.send_interval(5_000, :snap)
@@ -93,7 +97,15 @@ defmodule MyCamera do
 
   def handle_info(:snap, entity) do
     response = Req.get!("https://picsum.photos/200")
-    entity |> set_image(response.body) |> set_attributes(%{foo: "bar"})
+    bytes = hd(response.headers["content-length"])
+
+    bytes =
+      case bytes do
+        nil -> 0
+        bytes -> String.to_integer(bytes)
+      end
+
+    entity |> set_image(response.body) |> set_attributes(%{bytes: bytes})
   end
 end
 ```
@@ -102,24 +114,18 @@ end
 {:ok, pid} =
   Homex.start_link(
     node_id: "livebook",
+    devices: [default: [name: "Livebook"]],
     adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
-    devices: [nested: [name: "my-nested-device", via: :default]],
     entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
   )
 ```
 
+## Dashboard
+
 ```elixir
-Homex.put_device(:new, name: "foo", via: :default)
+Homex.Livebook.new()
 ```
 
 ```elixir
-Homex.add_entity({MyLight, name: "new-light", device: :new})
-```
-
-```elixir
-Homex.Entity.DeviceTrigger.trigger("my-device-trigger")
-```
-
-```elixir
-Homex.Entity.snapshot("my-light")
+Homex.Entity.snapshot("Lava Lamp")
 ```
