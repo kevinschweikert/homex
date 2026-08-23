@@ -4,11 +4,11 @@ defmodule Homex.Entity do
   authoring entity kinds.
 
   An entity is backed by a single `module` that `use`s a kind such as
-  `Homex.Entity.Switch`. It implements the required `c:new/1`, `c:setup/1` and
-  `c:handle_command/2` callbacks (the kind supplies `setup`/`handle_command`
-  via `use`) and may implement the optional handler callbacks (`handle_init`,
-  `handle_info`, `handle_call`, `handle_cast`) plus any kind-specific hooks
-  like `handle_on/1`.
+  `Homex.Entity.Switch`. The kind supplies the required `c:validate/1`,
+  `c:describe/1`, `c:setup/1` and `c:handle_command/2` callbacks and generates
+  the module's own new/1 constructor. The module may implement the optional
+  handler callbacks (`handle_init`, `handle_info`, `handle_call`,
+  `handle_cast`) plus any kind-specific hooks like `handle_on/1`.
 
   ## Authoring a kind
 

@@ -1,0 +1,159 @@
+.device {
+  font-size: .8rem;
+  opacity: .6;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin: 20px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(127, 127, 127, .25)
+}
+
+.device:first-child {
+  margin-top: 0
+}
+
+/* the rows share a height and the cards fill them, so no card can end up
+   taller than its neighbour whatever controls it carries. auto-fill rather
+   than auto-fit, so a lone card in the last row keeps one column's width */
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-auto-rows: 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, .25)
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-width: 0
+}
+
+.icon {
+  font-size: 1.7rem;
+  line-height: 1
+}
+
+.text {
+  flex: 1;
+  min-width: 0
+}
+
+.name {
+  font-size: .7rem;
+  opacity: .55;
+  letter-spacing: .05em;
+  text-transform: uppercase
+}
+
+.value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2
+}
+
+.value.on {
+  color: #f59e0b
+}
+
+.unit {
+  font-size: .9rem;
+  font-weight: 400;
+  opacity: .6
+}
+
+.sub {
+  font-size: .75rem;
+  opacity: .55
+}
+
+.bar {
+  margin-top: .5rem;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(127, 127, 127, .25)
+}
+
+.fill {
+  height: 6px;
+  border-radius: 99px;
+  background: #f59e0b
+}
+
+.snap {
+  max-height: 120px;
+  max-width: 55%;
+  object-fit: contain;
+  border-radius: 6px
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px
+}
+
+.controls button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: .35rem .9rem;
+  border: 1px solid rgba(127, 127, 127, .3);
+  border-radius: 6px;
+  background: rgba(127, 127, 127, .08)
+}
+
+.controls button:hover {
+  background: rgba(127, 127, 127, .18)
+}
+
+.slider {
+  flex: 1;
+  min-width: 120px;
+  accent-color: #f59e0b
+}
+
+.toggle {
+  appearance: none;
+  margin: 0;
+  position: relative;
+  cursor: pointer;
+  width: 40px;
+  height: 22px;
+  border-radius: 99px;
+  background: rgba(127, 127, 127, .3);
+  transition: background .15s
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .15s
+}
+
+.toggle:checked {
+  background: #f59e0b
+}
+
+.toggle:checked::after {
+  transform: translateX(18px)
+}

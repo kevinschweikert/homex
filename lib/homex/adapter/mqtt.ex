@@ -35,6 +35,10 @@ defmodule Homex.Adapter.MQTT do
   @moduledoc """
   Home Assistant MQTT discovery transport.
 
+  Requires `:emqtt`, which homex does not pull in on its own:
+
+      {:emqtt, "~> 1.14.7"}
+
   Start it from the `:adapters` option of `Homex`:
 
       {Homex,
@@ -48,6 +52,9 @@ defmodule Homex.Adapter.MQTT do
   """
 
   use GenServer
+
+  # :emqtt is optional, so its absence is reported by init/1 rather than by the compiler
+  @compile {:no_warn_undefined, :emqtt}
 
   require Logger
 
@@ -121,6 +128,13 @@ defmodule Homex.Adapter.MQTT do
 
   @impl GenServer
   def init(opts) do
+    Code.ensure_loaded?(:emqtt) ||
+      raise """
+      #{inspect(__MODULE__)} needs the :emqtt dependency, which homex does not pull in on its own. Add it to your deps:
+
+          {:emqtt, "~> 1.14.7"}
+      """
+
     Logger.put_application_level(:emqtt, :info)
     Process.flag(:trap_exit, true)
     Homex.subscribe()

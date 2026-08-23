@@ -14,6 +14,8 @@ This library aims to bring Elixir (and especially Nerves) closer to Home Assista
 
 There is a Livebook example [`example.livemd`](https://livebook.dev/run?url=https://raw.githubusercontent.com/kevinschweikert/homex/refs/heads/main/example.livemd) to get you started! There is also an example repository using Nerves at https://github.com/kevinschweikert/Homex-Nerves-Example
 
+![Livebook Integration](./assets/livebook-integration.png)
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
@@ -23,10 +25,24 @@ by adding `homex` to your list of dependencies in `mix.exs`:
 def deps do
   [
     {:homex, "~> 0.1.2"},
-    # If you want to use the MQTT library without QUIC support add
-    # {:emqtt, github: "emqx/emqtt.git", tag: "1.14.7", override: true, system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}
+    # for the MQTT adapter
+    {:emqtt, "~> 1.14.7"},
+    # for the Livebook dashboard
+    {:kino, "~> 0.19"}
   ]
 end
+```
+
+Homex pulls in neither on its own — add the ones for the adapters you use.
+
+To build `emqtt` without QUIC support, and skip the `quicer` NIF compilation:
+
+```elixir
+{:emqtt,
+ github: "emqx/emqtt",
+ tag: "1.14.7",
+ override: true,
+ system_env: [{"BUILD_WITHOUT_QUIC", "1"}]}
 ```
 
 ## Usage

@@ -53,6 +53,7 @@ defmodule Homex.MixProject do
       source_url: @source_url,
       source_ref: "v#{@version}",
       extras: ["README.md", "CHANGELOG.md"],
+      assets: %{"assets" => "assets"},
       groups_for_modules: [
         Entities: [
           Homex.Entity,
@@ -62,6 +63,9 @@ defmodule Homex.MixProject do
           Homex.Entity.Camera,
           Homex.Entity.Button,
           Homex.Entity.DeviceTrigger
+        ],
+        Livebook: [
+          Homex.Livebook
         ],
         MQTT: [
           Homex.Adapter.MQTT,
@@ -75,9 +79,10 @@ defmodule Homex.MixProject do
   defp deps do
     [
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:emqtt, "~> 1.14.7"},
+      {:emqtt, "~> 1.14.7", optional: true},
       {:ex_doc, "~> 0.38", only: :docs},
       {:jason, "~> 1.4", optional: true},
+      {:kino, "~> 0.19", optional: true},
       {:nimble_options, "~> 1.1"}
     ]
   end
