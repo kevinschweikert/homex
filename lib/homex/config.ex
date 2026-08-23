@@ -41,34 +41,17 @@ defmodule Homex.Config do
                        ]
                      ]
                    ],
-                   discovery_prefix: [
-                     required: false,
-                     type: :string,
-                     default: "homeassistant",
-                     doc:
-                       "if changed in Homeassistant you also need to change it here to enable autodiscovery. The default works for a standard installation"
-                   ],
                    entities: [
                      required: false,
                      default: [],
                      type: {:list, {:or, [:atom, :keyword_list]}}
                    ],
-                   broker: [
+                   adapters: [
                      required: false,
                      default: [],
-                     type: :keyword_list,
-                     keys: [
-                       host: [type: :string, default: "localhost", doc: "host of the MQTT broker"],
-                       port: [type: :integer, default: 1883, doc: "port of the MQTT broker"],
-                       username: [
-                         type: :string,
-                         doc: "username for the MQTT broker"
-                       ],
-                       password: [
-                         type: :string,
-                         doc: "passwort for the MQTT broker"
-                       ]
-                     ]
+                     type: {:list, {:or, [:atom, {:tuple, [:atom, :keyword_list]}]}},
+                     doc:
+                       "Transports to start, as `module` or `{module, opts}`. Each adapter documents its own options — see `Homex.Adapter.MQTT`. With none given the entities still run, they are just not published anywhere."
                    ]
                  ]
                  |> NimbleOptions.new!()
@@ -79,33 +62,24 @@ defmodule Homex.Config do
           node_id: String.t(),
           devices: %{Homex.Device.id() => Homex.Device.t()},
           origin: map(),
-          discovery_prefix: String.t(),
           entities: [module() | Keyword.t()],
-          broker: [
-            name: atom(),
-            host: charlist(),
-            port: :inet.port_number(),
-            username: charlist(),
-            password: charlist()
-          ]
+          adapters: [module() | {module(), keyword()}]
         }
 
-  defstruct [:node_id, :devices, :origin, :discovery_prefix, :entities, :broker]
+  defstruct [:node_id, :devices, :origin, :entities, :adapters]
 
   @doc false
   @spec new(Keyword.t()) :: t()
   def new(opts) do
     config = opts |> NimbleOptions.validate!(@config_schema)
     origin = config |> make_origin_config()
-    broker = config |> make_broker_config()
 
     %__MODULE__{
       node_id: config[:node_id],
       devices: config |> make_devices_config(),
       origin: origin,
-      broker: broker,
-      discovery_prefix: config[:discovery_prefix],
-      entities: config[:entities]
+      entities: config[:entities],
+      adapters: config[:adapters]
     }
   end
 
@@ -125,22 +99,4 @@ defmodule Homex.Config do
   defp make_origin_config(opts) do
     opts |> Keyword.fetch!(:origin) |> Map.new()
   end
-
-  defp make_broker_config(opts) do
-    config =
-      opts
-      |> Keyword.get(:broker, [])
-
-    [
-      name: Homex.EMQTT,
-      host: String.to_charlist(config[:host]),
-      port: config[:port],
-      username: optional(config[:username], &String.to_charlist/1),
-      password: optional(config[:password], &String.to_charlist/1)
-    ]
-    |> Keyword.reject(fn {_key, val} -> is_nil(val) end)
-  end
-
-  defp optional(val, _) when is_nil(val), do: nil
-  defp optional(val, transformer), do: transformer.(val)
 end

@@ -27,7 +27,7 @@ defmodule Homex.Entity.SwitchTest do
     Process.register(self(), :switch_test)
     {:ok, entity} = Entity.new(TestSwitch)
     start_supervised!({Entity, entity})
-    assert_receive {:publish_state, _, %{state: false}}
+    assert_receive {:homex, :state, _, _, %{state: false}}
     :ok
   end
 
@@ -44,31 +44,31 @@ defmodule Homex.Entity.SwitchTest do
     Entity.send_command("test-switch", %{state: true})
 
     assert_receive {:handle_on, %{state: true}}
-    assert_receive {:publish_state, %Descriptor{kind: :switch}, %{state: true}}
+    assert_receive {:homex, :state, %Descriptor{kind: :switch}, _, %{state: true}}
     assert Entity.snapshot("test-switch") == %{state: true}
   end
 
   test "an unchanged state still fires the callback but is not re-published" do
     Entity.send_command("test-switch", %{state: true})
-    assert_receive {:publish_state, _, %{state: true}}
+    assert_receive {:homex, :state, _, _, %{state: true}}
 
     Entity.send_command("test-switch", %{state: true})
     assert_receive {:handle_on, _}
-    refute_receive {:publish_state, _, _}
+    refute_receive {:homex, :state, %Descriptor{name: "test-switch"}, _, _}
   end
 
   test "turning off after on publishes both transitions" do
     Entity.send_command("test-switch", %{state: true})
-    assert_receive {:publish_state, _, %{state: true}}
+    assert_receive {:homex, :state, _, _, %{state: true}}
 
     Entity.send_command("test-switch", %{state: false})
     assert_receive {:handle_off, %{state: false}}
-    assert_receive {:publish_state, _, %{state: false}}
+    assert_receive {:homex, :state, _, _, %{state: false}}
   end
 
   test "unknown command maps are ignored" do
     Entity.send_command("test-switch", %{bogus: true})
-    refute_receive {:publish_state, _, _}
+    refute_receive {:homex, :state, %Descriptor{name: "test-switch"}, _, _}
   end
 
   describe "handle_command/2" do

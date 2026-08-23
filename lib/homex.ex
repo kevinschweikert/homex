@@ -1,6 +1,8 @@
 defmodule Homex do
   use Supervisor
 
+  require Logger
+
   def start_link(init_arg \\ []) do
     {name, rest} = Keyword.pop(init_arg, :name, __MODULE__)
     Supervisor.start_link(__MODULE__, rest, name: name)
@@ -22,13 +24,20 @@ defmodule Homex do
        meta: [
          node_id: config.node_id,
          devices: config.devices,
-         origin: config.origin,
-         adapters: [{Homex.Adapter.MQTT, Homex.Adapter.MQTT}]
+         origin: config.origin
        ]},
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
-      {Task, fn -> Homex.add_entities(config.entities) end},
-      # TODO: start conditionally!
-      {Homex.Adapter.MQTT, config}
+      {Registry, name: Homex.Subscribers, keys: :duplicate},
+      {DynamicSupervisor, name: Homex.AdapterSupervisor, strategy: :one_for_one},
+      {Task,
+       fn ->
+         if config.adapters == [] do
+           Logger.warning("no adapters configured, entities run but are not published anywhere")
+         end
+
+         Homex.add_adapters(config.adapters)
+         Homex.add_entities(config.entities)
+       end}
     ]
 
     opts = [strategy: :rest_for_one, name: __MODULE__]
@@ -43,10 +52,14 @@ defmodule Homex do
   there is no global state and no application environment involved:
 
   ```elixir
-  {Homex, node_id: Homex.hostname(), broker: [host: "localhost", port: 1883], entities: [MyEntity]}
+  {Homex,
+   node_id: Homex.hostname(),
+   adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
+   entities: [MyEntity]}
   ```
 
-  The available options are documented in `Homex.Config`.
+  The available options are documented in `Homex.Config`. Each adapter documents
+  its own options — see `Homex.Adapter.MQTT`.
 
   ## Usage
 
@@ -76,8 +89,10 @@ defmodule Homex do
   end
   ```
 
-  Add `homex` to your supervision tree with your entities. Entities can also be
-  added/removed at runtime with `Homex.add_entity/1` or `Homex.remove_entity/1`.
+  Add `homex` to your supervision tree with your entities and the adapters that
+  publish them — without an adapter the entities still run, they are just not
+  published anywhere. Entities can also be added/removed at runtime with
+  `Homex.add_entity/1` or `Homex.remove_entity/1`.
 
   ```elixir
   defmodule MyApp.Application do
@@ -85,7 +100,10 @@ defmodule Homex do
       children =
         [
           ...,
-          {Homex, node_id: Homex.hostname(), entities: [MySwitch]},
+          {Homex,
+           node_id: Homex.hostname(),
+           adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
+           entities: [MySwitch]},
           ...
         ]
 
@@ -108,9 +126,6 @@ defmodule Homex do
       :error -> default
     end
   end
-
-  @doc "The running adapter instances as `{module, instance}` pairs"
-  def adapters(), do: meta(:adapters, [])
 
   def node_id() do
     case meta(:node_id, nil) do
@@ -163,15 +178,33 @@ defmodule Homex do
     end
   end
 
+  def subscribe, do: Registry.register(Homex.Subscribers, :entities, nil)
+
+  def broadcast(msg) do
+    Registry.dispatch(Homex.Subscribers, :entities, fn subscribers ->
+      for {pid, _} <- subscribers, do: send(pid, msg)
+    end)
+  end
+
+  defp notify_subscribers(), do: Homex.broadcast({:homex, :entities_changed})
+
   def add_entity(opts) do
     with :ok <- start_entity(opts) do
-      notify_adapters()
+      notify_subscribers()
     end
   end
 
   def add_entities(entities) do
     Enum.each(entities, &start_entity/1)
-    notify_adapters()
+    notify_subscribers()
+  end
+
+  def add_adapter(opts) do
+    start_adapter(opts)
+  end
+
+  def add_adapters(adapters) do
+    Enum.each(adapters, &start_adapter/1)
   end
 
   @doc """
@@ -179,15 +212,15 @@ defmodule Homex do
 
   See `Homex.Device` for the available options.
   """
-  # ponytail: read-modify-write on the registry meta, concurrent callers can
-  # lose an update. Serialize through a process if devices ever get written
-  # from more than one place.
+  # TODO: read-modify-write on the registry meta, concurrent callers can lose an
+  # update. Serialize through a process if devices ever get written from more
+  # than one place.
   @spec put_device(Homex.Device.id(), keyword()) ::
           :ok | {:error, NimbleOptions.ValidationError.t()}
   def put_device(id, opts \\ []) do
     with {:ok, device} <- Homex.Device.new(id, opts) do
       Registry.put_meta(Homex.EntityRegistry, :devices, Map.put(devices(), id, device))
-      notify_adapters()
+      notify_subscribers()
     end
   end
 
@@ -200,7 +233,7 @@ defmodule Homex do
   @spec delete_device(Homex.Device.id()) :: :ok
   def delete_device(id) do
     Registry.put_meta(Homex.EntityRegistry, :devices, Map.delete(devices(), id))
-    notify_adapters()
+    notify_subscribers()
   end
 
   defp start_entity(spec) do
@@ -215,19 +248,29 @@ defmodule Homex do
     case Registry.lookup(Homex.EntityRegistry, name) do
       [{pid, _descriptor}] ->
         :ok = GenServer.call(pid, {:homex, :remove})
-        notify_adapters()
+        notify_subscribers()
 
       [] ->
         {:error, :not_found}
     end
   end
 
-  defp notify_adapters() do
-    for {module, instance} <- adapters() do
-      module.entities_changed(instance)
-    end
+  def start_adapter(spec), do: DynamicSupervisor.start_child(Homex.AdapterSupervisor, spec)
 
-    :ok
+  @doc "The running adapters as `{module, pid}` pairs"
+  def adapters do
+    for {_, pid, _, [module]} <- DynamicSupervisor.which_children(Homex.AdapterSupervisor),
+        do: {module, pid}
+  end
+
+  def remove_adapter(pid) when is_pid(pid),
+    do: DynamicSupervisor.terminate_child(Homex.AdapterSupervisor, pid)
+
+  def remove_adapter(module) when is_atom(module) do
+    case List.keyfind(adapters(), module, 0) do
+      {^module, pid} -> remove_adapter(pid)
+      nil -> {:error, :not_found}
+    end
   end
 
   @doc false

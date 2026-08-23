@@ -33,7 +33,7 @@ defmodule Homex.Entity.LightTest do
     Process.register(self(), :light_test)
     {:ok, entity} = Entity.new(TestLight)
     start_supervised!({Entity, entity})
-    assert_receive {:publish_state, _, %{state: false, brightness: 0}}
+    assert_receive {:homex, :state, _, _, %{state: false, brightness: 0}}
     :ok
   end
 
@@ -47,12 +47,12 @@ defmodule Homex.Entity.LightTest do
 
     assert_receive {:handle_on, %{state: true, brightness: 50}}
     assert_receive {:handle_brightness, 50, %{}}
-    assert_receive {:publish_state, _, %{state: true, brightness: 50}}
+    assert_receive {:homex, :state, _, _, %{state: true, brightness: 50}}
   end
 
   test "a compound command is equivalent to the same commands sent sequentially" do
     Entity.send_command("test-light", %{state: true, brightness: 50})
-    assert_receive {:publish_state, _, %{state: true, brightness: 50}}
+    assert_receive {:homex, :state, _, _, %{state: true, brightness: 50}}
     compound_snapshot = Entity.snapshot("test-light")
 
     stop_supervised!({Entity, "test-light"})
@@ -68,9 +68,9 @@ defmodule Homex.Entity.LightTest do
   test "brightness is ignored when the mode is not enabled" do
     {:ok, entity} = SimpleLight.new(name: "onoff-light")
     start_supervised!({Entity, entity})
-    assert_receive {:publish_state, _, %{state: false}}
+    assert_receive {:homex, :state, _, _, %{state: false}}
     Entity.send_command("onoff-light", %{brightness: 50})
-    refute_receive {:publish_state, _, _}
+    refute_receive {:homex, :state, %Descriptor{name: "onoff-light"}, _, _}
   end
 
   describe "setup/1" do

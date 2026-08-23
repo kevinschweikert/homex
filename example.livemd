@@ -102,6 +102,7 @@ end
 {:ok, pid} =
   Homex.start_link(
     node_id: "livebook",
+    adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
     devices: [nested: [name: "my-nested-device", via: :default]],
     entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
   )

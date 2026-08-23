@@ -30,21 +30,21 @@ defmodule Homex.Entity.SensorTest do
   test "set_value publishes the committed diff" do
     Homex.notify("test-sensor", {:set_value, 21.5})
 
-    assert_receive {:publish_state, %Descriptor{kind: :sensor}, %{state: 21.5}}
+    assert_receive {:homex, :state, %Descriptor{kind: :sensor}, _, %{state: 21.5}}
     assert Entity.snapshot("test-sensor") == %{state: 21.5}
   end
 
   test "an unchanged value is not re-published" do
     Homex.notify("test-sensor", {:set_value, 21.5})
-    assert_receive {:publish_state, _, %{state: 21.5}}
+    assert_receive {:homex, :state, _, _, %{state: 21.5}}
 
     Homex.notify("test-sensor", {:set_value, 21.5})
-    refute_receive {:publish_state, _, _}
+    refute_receive {:homex, :state, %Descriptor{name: "test-sensor"}, _, _}
   end
 
   test "sensors ignore inbound commands" do
     Entity.send_command("test-sensor", %{state: 99})
-    refute_receive {:publish_state, _, _}
+    refute_receive {:homex, :state, %Descriptor{name: "test-sensor"}, _, _}
   end
 
   describe "set_value/2" do

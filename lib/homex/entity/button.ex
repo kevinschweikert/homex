@@ -91,7 +91,9 @@ defmodule Homex.Entity.Button do
   def setup(%{module: m} = entity), do: m.handle_init(entity)
 
   @impl Homex.Entity
-  def handle_command(%{pressed: true}, %{module: m} = entity), do: m.handle_press(entity)
+  def handle_command(%{pressed: true}, %{module: m} = entity),
+    do: entity |> m.handle_press() |> Entity.put_change(:pressed, true)
+
   def handle_command(_cmd, entity), do: entity
 
   @doc """

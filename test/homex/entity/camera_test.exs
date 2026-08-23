@@ -21,10 +21,10 @@ defmodule Homex.Entity.CameraTest do
 
   test "image and attrs changes each publish to their own topic" do
     Homex.notify("test-camera", {:snap, <<1, 2, 3>>})
-    assert_receive {:publish_state, %Descriptor{kind: :camera}, %{image: <<1, 2, 3>>}}
+    assert_receive {:homex, :state, %Descriptor{kind: :camera}, _, %{image: <<1, 2, 3>>}}
 
     Homex.notify("test-camera", {:attrs, %{motion: true}})
-    assert_receive {:publish_state, _, %{attrs: %{motion: true}}}
+    assert_receive {:homex, :state, _, _, %{attrs: %{motion: true}}}
   end
 
   describe "set_image/2 and set_attributes/2" do
