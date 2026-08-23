@@ -35,13 +35,19 @@ defmodule Homex.Adapter.MQTT.Light do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(_desc, topics, changes) do
-    payload =
-      %{}
-      |> maybe_put("state", changes[:state], &wire_state/1)
-      |> maybe_put("brightness", changes[:brightness], &wire_brightness/1)
+  # ha reads a json light message as a full snapshot, so the state goes into every
+  # message, also when only the brightness changed
+  def publish(_desc, topics, values, _changes) do
+    case wire_state(values[:state]) do
+      nil ->
+        []
 
-    if payload == %{}, do: [], else: [{topics.state, Homex.encode!(payload)}]
+      state ->
+        payload =
+          maybe_put(%{"state" => state}, "brightness", values[:brightness], &wire_brightness/1)
+
+        [{topics.state, Homex.encode!(payload)}]
+    end
   end
 
   defp color_modes(modes), do: if(:brightness in modes, do: ["brightness"], else: ["onoff"])
@@ -72,6 +78,7 @@ defmodule Homex.Adapter.MQTT.Light do
 
   defp wire_state(true), do: "ON"
   defp wire_state(false), do: "OFF"
+  defp wire_state(_), do: nil
 
   defp wire_brightness(value), do: round(value / 100 * 255)
 end

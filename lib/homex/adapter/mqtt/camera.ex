@@ -25,7 +25,7 @@ defmodule Homex.Adapter.MQTT.Camera do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(_desc, topics, changes) do
+  def publish(_desc, topics, _values, changes) do
     Enum.flat_map(changes, fn
       {:image, image} -> [{topics.image, image}]
       {:attrs, attrs} -> [{topics.attributes, Homex.encode!(attrs)}]

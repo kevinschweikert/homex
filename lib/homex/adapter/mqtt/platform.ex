@@ -11,6 +11,6 @@ defmodule Homex.Adapter.MQTT.Platform do
   @callback component(Homex.Descriptor.t(), topics()) :: map()
   @callback subscriptions(Homex.Descriptor.t(), topics()) :: [String.t()]
   @callback normalize(payload :: term()) :: map() | nil
-  @callback publish(Homex.Descriptor.t(), topics(), changes :: map()) ::
+  @callback publish(Homex.Descriptor.t(), topics(), values :: map(), changes :: map()) ::
               [{topic :: String.t(), payload :: iodata()}]
 end

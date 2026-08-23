@@ -22,12 +22,19 @@ defmodule Homex.Adapter do
   @callback child_spec({name(), opts :: keyword(), ctx :: map()}) :: Supervisor.child_spec()
 
   @doc """
-  Delivers the committed state diff of an entity.
+  Delivers a committed change of an entity.
 
-  Called after every entity change commit with the entity's descriptor and a
-  map of the fields that actually changed.
+  Called after every entity change commit with the entity's descriptor, the values
+  of all fields after the commit and the fields that actually changed. A transport
+  that reports a full snapshot per message builds it from `values`; a transport
+  with one topic per field uses `changes` to publish only what changed.
   """
-  @callback publish_state(name(), descriptor :: Homex.Descriptor.t(), changes :: map()) :: :ok
+  @callback publish_state(
+              name(),
+              descriptor :: Homex.Descriptor.t(),
+              values :: map(),
+              changes :: map()
+            ) :: :ok
 
   @doc """
   Signals that entities were added or removed, so the adapter can update

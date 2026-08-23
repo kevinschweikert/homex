@@ -2,7 +2,7 @@ defmodule Homex.Adapter.Test do
   @moduledoc """
   A `Homex.Adapter` for tests.
 
-  Forwards every `publish_state/3` as `{:publish_state, descriptor, changes}`
+  Forwards every `publish_state/4` as `{:publish_state, descriptor, changes}`
   and every `entities_changed/1` as `:entities_changed` to the attached process:
 
       Homex.Adapter.Test.attach()
@@ -29,7 +29,7 @@ defmodule Homex.Adapter.Test do
   end
 
   @impl Homex.Adapter
-  def publish_state(_instance, descriptor, changes) do
+  def publish_state(_instance, descriptor, _values, changes) do
     notify_attached({:publish_state, descriptor, changes})
   end
 

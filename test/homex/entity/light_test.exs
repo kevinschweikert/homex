@@ -110,6 +110,33 @@ defmodule Homex.Entity.LightTest do
     end
   end
 
+  describe "MQTT publish" do
+    alias Homex.Adapter.MQTT
+
+    @desc %Descriptor{kind: :light, name: "test-light", fields: %{state: :state}}
+    @topics %{state: "homex/light/id", command: "homex/light/id/set"}
+
+    test "the state is in every message, also when only the brightness changed" do
+      values = %{state: true, brightness: 78}
+
+      assert [{"homex/light/id", payload}] =
+               MQTT.Light.publish(@desc, @topics, values, %{brightness: 78})
+
+      assert Homex.decode!(payload) == %{"state" => "ON", "brightness" => 199}
+    end
+
+    test "an off light reports its brightness too" do
+      assert [{_topic, payload}] =
+               MQTT.Light.publish(@desc, @topics, %{state: false, brightness: 0}, %{state: false})
+
+      assert Homex.decode!(payload) == %{"state" => "OFF", "brightness" => 0}
+    end
+
+    test "no message while the state is unknown" do
+      assert [] == MQTT.Light.publish(@desc, @topics, %{brightness: 78}, %{brightness: 78})
+    end
+  end
+
   describe "MQTT normalize" do
     alias Homex.Adapter.MQTT
 
