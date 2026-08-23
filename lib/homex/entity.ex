@@ -258,10 +258,7 @@ defmodule Homex.Entity do
   def start_link(%__MODULE__{} = entity), do: GenServer.start_link(__MODULE__, entity)
 
   @impl GenServer
-  def init(%__MODULE__{module: module} = entity) do
-    descriptor =
-      Homex.Descriptor.put_unique_id(entity.descriptor, Homex.node_id())
-
+  def init(%__MODULE__{module: module, descriptor: descriptor} = entity) do
     with {:ok, _pid} <-
            Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do
       values = Map.new(descriptor.fields, fn {key, _kind} -> {key, nil} end)

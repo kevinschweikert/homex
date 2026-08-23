@@ -2,19 +2,19 @@ defmodule Homex.Adapter.MQTT.Light do
   @moduledoc false
   @behaviour Homex.Adapter.MQTT.Platform
 
-  alias Homex.Adapter.MQTT
+  @impl Homex.Adapter.MQTT.Platform
+  def segments(_desc), do: %{state: [], command: ["set"]}
 
   @impl Homex.Adapter.MQTT.Platform
-  def component(desc) do
+  def component(desc, topics) do
     modes = desc.options[:modes] || []
 
     base = %{
       platform: "light",
       schema: "json",
-      state_topic: state_topic(desc),
-      command_topic: command_topic(desc),
+      state_topic: topics.state,
+      command_topic: topics.command,
       name: desc.name,
-      unique_id: desc.unique_id,
       supported_color_modes: color_modes(modes)
     }
 
@@ -22,7 +22,7 @@ defmodule Homex.Adapter.MQTT.Light do
   end
 
   @impl Homex.Adapter.MQTT.Platform
-  def subscriptions(desc), do: [command_topic(desc)]
+  def subscriptions(_desc, topics), do: [topics.command]
 
   @impl Homex.Adapter.MQTT.Platform
   def normalize(payload) when is_binary(payload) do
@@ -35,17 +35,14 @@ defmodule Homex.Adapter.MQTT.Light do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(desc, changes) do
+  def publish(_desc, topics, changes) do
     payload =
       %{}
       |> maybe_put("state", changes[:state], &wire_state/1)
       |> maybe_put("brightness", changes[:brightness], &wire_brightness/1)
 
-    if payload == %{}, do: [], else: [{state_topic(desc), Homex.encode!(payload)}]
+    if payload == %{}, do: [], else: [{topics.state, Homex.encode!(payload)}]
   end
-
-  defp state_topic(desc), do: MQTT.topic(desc)
-  defp command_topic(desc), do: MQTT.topic(desc, ["set"])
 
   defp color_modes(modes), do: if(:brightness in modes, do: ["brightness"], else: ["onoff"])
 

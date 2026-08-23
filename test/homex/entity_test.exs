@@ -103,13 +103,10 @@ defmodule Homex.EntityTest do
       start_supervised!({Entity, default}, id: :default)
       start_supervised!({Entity, second}, id: :second)
 
-      assert {:ok, %Descriptor{name: "entity-test-switch", unique_id: default_id}} =
+      assert {:ok, %Descriptor{name: "entity-test-switch"}} =
                Homex.descriptor("entity-test-switch")
 
-      assert {:ok, %Descriptor{name: "second-switch", unique_id: second_id}} =
-               Homex.descriptor("second-switch")
-
-      assert default_id != second_id
+      assert {:ok, %Descriptor{name: "second-switch"}} = Homex.descriptor("second-switch")
 
       Entity.send_command("second-switch", %{state: true})
       assert_receive {:publish_state, %Descriptor{name: "second-switch"}, %{state: true}}

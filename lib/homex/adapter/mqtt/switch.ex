@@ -2,26 +2,26 @@ defmodule Homex.Adapter.MQTT.Switch do
   @moduledoc false
   @behaviour Homex.Adapter.MQTT.Platform
 
-  alias Homex.Adapter.MQTT
-
   @on_payload "ON"
   @off_payload "OFF"
 
   @impl Homex.Adapter.MQTT.Platform
-  def component(desc) do
+  def segments(_desc), do: %{state: [], command: ["set"]}
+
+  @impl Homex.Adapter.MQTT.Platform
+  def component(desc, topics) do
     %{
       platform: "switch",
-      state_topic: state_topic(desc),
-      command_topic: command_topic(desc),
+      state_topic: topics.state,
+      command_topic: topics.command,
       name: desc.name,
-      unique_id: desc.unique_id,
       payload_on: @on_payload,
       payload_off: @off_payload
     }
   end
 
   @impl Homex.Adapter.MQTT.Platform
-  def subscriptions(desc), do: [command_topic(desc)]
+  def subscriptions(_desc, topics), do: [topics.command]
 
   @impl Homex.Adapter.MQTT.Platform
   def normalize(@on_payload), do: %{state: true}
@@ -29,10 +29,7 @@ defmodule Homex.Adapter.MQTT.Switch do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
-  def publish(desc, %{state: true}), do: [{state_topic(desc), @on_payload}]
-  def publish(desc, %{state: false}), do: [{state_topic(desc), @off_payload}]
-  def publish(_desc, _changes), do: []
-
-  defp state_topic(desc), do: MQTT.topic(desc)
-  defp command_topic(desc), do: MQTT.topic(desc, ["set"])
+  def publish(_desc, topics, %{state: true}), do: [{topics.state, @on_payload}]
+  def publish(_desc, topics, %{state: false}), do: [{topics.state, @off_payload}]
+  def publish(_desc, _topics, _changes), do: []
 end
