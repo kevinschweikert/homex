@@ -12,7 +12,7 @@ Mix.install([
 ## Homex
 
 ```elixir
-Logger.put_process_level(self(), :info)
+Logger.configure(level: :info)
 ```
 
 ```elixir
@@ -96,17 +96,12 @@ defmodule MyCamera do
     entity
   end
 
-  def handle_info(:snap, entity) do
-    response = Req.get!("https://picsum.photos/200")
-    bytes = hd(response.headers["content-length"])
+  def handle_info(:snap, entity), do: snap(entity)
+  def handle_capture(entity), do: snap(entity)
 
-    bytes =
-      case bytes do
-        nil -> 0
-        bytes -> String.to_integer(bytes)
-      end
-
-    entity |> set_image(response.body) |> set_attributes(%{bytes: bytes})
+  defp snap(entity) do
+    %{body: image} = Req.get!("https://picsum.photos/200")
+    entity |> set_image(image) |> set_attributes(%{bytes: byte_size(image)})
   end
 end
 ```

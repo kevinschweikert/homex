@@ -4,13 +4,18 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
 
   use GenServer
 
-  alias Homex.Adapter.ESPHome.{Button, Platform, Sensor, Switch}
+  alias Homex.Adapter.ESPHome.{Button, Platform, Sensor, Switch, Light, Camera}
   alias Homex.Descriptor
+
+  # TODO:
+  # - support devices
 
   @platforms %{
     switch: Switch,
     sensor: Sensor,
-    button: Button
+    button: Button,
+    light: Light,
+    camera: Camera
   }
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
