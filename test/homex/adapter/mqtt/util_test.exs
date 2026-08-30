@@ -4,8 +4,8 @@ defmodule Homex.Adapter.MQTT.UtilTest do
   alias Homex.Adapter.MQTT.Util
   alias Homex.Descriptor
 
-  @prod %Descriptor{device: nil, kind: :sensor, name: "temp", fields: %{state: :state}}
-  @dev %Descriptor{device: :dev, kind: :sensor, name: "temp", fields: %{state: :state}}
+  @prod %Descriptor{device: nil, kind: :sensor, id: :temp, name: "Temp", fields: %{state: :state}}
+  @dev %Descriptor{device: :dev, kind: :sensor, id: :temp, name: "Temp", fields: %{state: :state}}
 
   test "moving an entity between devices keeps its identifier" do
     assert Util.component_identifier("node", @prod) == Util.component_identifier("node", @dev)
@@ -19,7 +19,8 @@ defmodule Homex.Adapter.MQTT.UtilTest do
   test "the identifier is stable against non-identity descriptor changes" do
     changed = %{
       @prod
-      | options: %{device_class: "temperature"},
+      | name: "Temperature",
+        options: %{device_class: "temperature"},
         transport: %{mqtt: [retain: false]}
     }
 
@@ -27,16 +28,16 @@ defmodule Homex.Adapter.MQTT.UtilTest do
   end
 
   test "two entities on one node get different identifiers" do
-    other = %{@prod | name: "humidity"}
+    other = %{@prod | id: :humidity}
 
     refute Util.component_identifier("node", @prod) == Util.component_identifier("node", other)
   end
 
-  test "two names with the same slug get different identifiers" do
-    spaced = %{@prod | name: "living room"}
-    dashed = %{@prod | name: "living-room"}
+  test "two ids with the same slug get different identifiers" do
+    spaced = %{@prod | id: :"living room"}
+    dashed = %{@prod | id: :"living-room"}
 
-    assert Homex.Util.slug(spaced.name) == Homex.Util.slug(dashed.name)
+    assert Homex.Util.slug(to_string(spaced.id)) == Homex.Util.slug(to_string(dashed.id))
 
     refute Util.component_identifier("node", spaced) ==
              Util.component_identifier("node", dashed)

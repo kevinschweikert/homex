@@ -45,14 +45,14 @@ defmodule Homex.Entity.DeviceTrigger do
 
   ```elixir
   defmodule MyDevice do
-    use Homex.Entity.DeviceTrigger, name: "my-device"
+    use Homex.Entity.DeviceTrigger, id: :my_device, name: "My Device"
   end
   ```
 
   Fire the trigger from your code:
 
   ```elixir
-  iex> Homex.Entity.DeviceTrigger.trigger("my-device")
+  iex> Homex.Entity.DeviceTrigger.trigger(:my_device)
   :ok
   ```
 
@@ -63,7 +63,7 @@ defmodule Homex.Entity.DeviceTrigger do
   instead of defining your own module:
 
   ```elixir
-  {Homex.Entity.DeviceTrigger, name: "my-device"}
+  {Homex.Entity.DeviceTrigger, id: :my_device, name: "My Device"}
   ```
 
   Run bare like this and the OTP handler callbacks (`handle_init`,
@@ -77,7 +77,7 @@ defmodule Homex.Entity.DeviceTrigger do
   defmacro __using__(opts), do: Homex.Entity.__entity__(__MODULE__, opts)
 
   @doc "Fires the trigger"
-  def trigger(name), do: Entity.send_command(name, %{trigger: true})
+  def trigger(id), do: Entity.send_command(id, %{trigger: true})
 
   # DeviceTrigger is meant to run bare, so it opts into being a runnable entity
   # and carries the handler defaults itself instead of getting them from `use`.

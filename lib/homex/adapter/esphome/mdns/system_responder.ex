@@ -8,7 +8,7 @@ defmodule Homex.Adapter.ESPHome.Mdns.SystemResponder do
   `Homex.Adapter.ESPHome` takes `:system` for it:
 
       {Homex,
-       node_id: Homex.hostname(),
+       id: Homex.hostname(),
        adapters: [{Homex.Adapter.ESPHome, mdns: :system}],
        entities: [MySwitch]}
 
@@ -79,5 +79,5 @@ defmodule Homex.Adapter.ESPHome.Mdns.SystemResponder do
   defp type(service), do: "_#{service.protocol}._#{service.transport}"
 
   defp instance_name(%{instance_name: name}) when is_binary(name), do: name
-  defp instance_name(_service), do: Homex.node_id()
+  defp instance_name(_service), do: Homex.instance_id()
 end

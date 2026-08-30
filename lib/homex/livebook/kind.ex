@@ -36,6 +36,7 @@ defmodule Homex.Livebook.Kind do
   def card(module, %Homex.Descriptor{} = descriptor, values, changes) do
     @defaults
     |> Map.merge(fields(module, descriptor, values, changes))
+    |> Map.put(:id, to_string(descriptor.id))
     |> Map.put(:name, descriptor.name)
   end
 

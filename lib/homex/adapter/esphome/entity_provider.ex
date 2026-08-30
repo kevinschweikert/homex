@@ -25,7 +25,7 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
   @impl Espex.EntityProvider
   def initial_states do
     for {module, descriptor} <- supported(),
-        values = Homex.Entity.snapshot(descriptor.name),
+        values = Homex.Entity.snapshot(descriptor.id),
         frame = Platform.state(module, descriptor, values),
         do: frame
   end
@@ -34,7 +34,7 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
   def handle_command(%{key: key} = request) do
     with {module, %Descriptor{} = descriptor} <- entity_for_key(key),
          %{} = command <- module.command(request) do
-      Homex.Entity.send_command(descriptor.name, command)
+      Homex.Entity.send_command(descriptor.id, command)
     end
 
     :ok
@@ -66,6 +66,6 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
   end
 
   defp entity_for_key(key) do
-    Enum.find(supported(), fn {_module, descriptor} -> Platform.key(descriptor.name) == key end)
+    Enum.find(supported(), fn {_module, descriptor} -> Platform.key(descriptor.id) == key end)
   end
 end

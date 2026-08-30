@@ -2,11 +2,11 @@ defmodule Homex.EntityTest do
   use Homex.EntityCase, async: true
 
   defmodule TestSwitch do
-    use Homex.Entity.Switch, name: "entity-test-switch"
+    use Homex.Entity.Switch, id: :entity_test_switch, name: "Entity Test Switch"
   end
 
   defp entity(fields) do
-    %Entity{descriptor: %Descriptor{kind: :switch, name: :test, fields: fields}}
+    %Entity{descriptor: %Descriptor{kind: :switch, id: :test, fields: fields}}
   end
 
   describe "put_change/3" do
@@ -45,7 +45,7 @@ defmodule Homex.EntityTest do
 
       entity |> Entity.put_change(:state, true) |> Entity.execute_change()
 
-      refute_receive {:homex, :state, %Descriptor{name: :test}, _, _}
+      refute_receive {:homex, :state, %Descriptor{id: :test}, _, _}
     end
 
     test "existing values stay untouched" do
@@ -63,21 +63,21 @@ defmodule Homex.EntityTest do
       assert {:ok,
               %Entity{
                 module: TestSwitch,
-                descriptor: %Descriptor{kind: :switch, name: "entity-test-switch"}
+                descriptor: %Descriptor{kind: :switch, id: :entity_test_switch}
               }} = Entity.new(TestSwitch)
     end
 
     test "accepts a {module, opts} pair overriding baked-in opts" do
-      assert {:ok, %Entity{module: TestSwitch, descriptor: %Descriptor{name: "other-name"}}} =
-               Entity.new({TestSwitch, name: "other-name"})
+      assert {:ok, %Entity{module: TestSwitch, descriptor: %Descriptor{id: :other_switch}}} =
+               Entity.new({TestSwitch, id: :other_switch, name: "Other Switch"})
     end
 
     test "accepts a kind module directly, without a use-based module" do
       assert {:ok,
               %Entity{
                 module: Homex.Entity.DeviceTrigger,
-                descriptor: %Descriptor{name: "plain"}
-              }} = Entity.new({Homex.Entity.DeviceTrigger, name: "plain"})
+                descriptor: %Descriptor{id: :plain}
+              }} = Entity.new({Homex.Entity.DeviceTrigger, id: :plain, name: "Plain"})
     end
 
     test "returns an error tuple on invalid options" do
@@ -91,25 +91,25 @@ defmodule Homex.EntityTest do
 
     test "rejects a plain kind module that must be used" do
       assert {:error, :entity_not_runnable} =
-               Entity.new({Homex.Entity.Switch, name: "plain"})
+               Entity.new({Homex.Entity.Switch, id: :plain, name: "Plain"})
     end
   end
 
   describe "instance names" do
     test "two instances of one handler run side by side with distinct identities" do
       {:ok, default} = Entity.new(TestSwitch)
-      {:ok, second} = Entity.new({TestSwitch, name: "second-switch"})
+      {:ok, second} = Entity.new({TestSwitch, id: :second_switch, name: "Second Switch"})
 
       start_supervised!({Entity, default}, id: :default)
       start_supervised!({Entity, second}, id: :second)
 
-      assert {:ok, %Descriptor{name: "entity-test-switch"}} =
-               Homex.descriptor("entity-test-switch")
+      assert {:ok, %Descriptor{id: :entity_test_switch}} =
+               Homex.descriptor(:entity_test_switch)
 
-      assert {:ok, %Descriptor{name: "second-switch"}} = Homex.descriptor("second-switch")
+      assert {:ok, %Descriptor{id: :second_switch}} = Homex.descriptor(:second_switch)
 
-      Entity.send_command("second-switch", %{state: true})
-      assert_receive {:homex, :state, %Descriptor{name: "second-switch"}, _, %{state: true}}
+      Entity.send_command(:second_switch, %{state: true})
+      assert_receive {:homex, :state, %Descriptor{id: :second_switch}, _, %{state: true}}
     end
   end
 end

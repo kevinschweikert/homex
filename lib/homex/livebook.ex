@@ -39,8 +39,8 @@ if Code.ensure_loaded?(Kino.JS) do
     # only after the layout they belong to, hence the trip through the mailbox
     @impl Kino.JS.Live
     def handle_info({:images, client_id}, ctx) do
-      for {name, image} <- ctx.assigns.images do
-        payload = {:binary, %{name: name}, image}
+      for {id, image} <- ctx.assigns.images do
+        payload = {:binary, %{id: to_string(id)}, image}
 
         if client_id,
           do: send_event(ctx, client_id, "image", payload),
@@ -57,12 +57,12 @@ if Code.ensure_loaded?(Kino.JS) do
 
     def handle_info({:homex, :state, descriptor, values, changes}, ctx) do
       broadcast_event(ctx, "card", card(descriptor, values, changes))
-      ctx = assign(ctx, values: Map.put(ctx.assigns.values, descriptor.name, values))
+      ctx = assign(ctx, values: Map.put(ctx.assigns.values, descriptor.id, values))
 
       case values do
         %{image: image} when is_binary(image) ->
-          broadcast_event(ctx, "image", {:binary, %{name: descriptor.name}, image})
-          {:noreply, assign(ctx, images: Map.put(ctx.assigns.images, descriptor.name, image))}
+          broadcast_event(ctx, "image", {:binary, %{id: to_string(descriptor.id)}, image})
+          {:noreply, assign(ctx, images: Map.put(ctx.assigns.images, descriptor.id, image))}
 
         _ ->
           {:noreply, ctx}
@@ -72,10 +72,10 @@ if Code.ensure_loaded?(Kino.JS) do
     def handle_info(_msg, ctx), do: {:noreply, ctx}
 
     @impl Kino.JS.Live
-    def handle_event("command", %{"name" => name, "cmd" => cmd}, ctx) do
-      case Enum.find(ctx.assigns.descriptors, &(&1.name == name)) do
+    def handle_event("command", %{"id" => id, "cmd" => cmd}, ctx) do
+      case Enum.find(ctx.assigns.descriptors, &(to_string(&1.id) == id)) do
         %Homex.Descriptor{} = descriptor ->
-          Homex.Entity.send_command(name, command(descriptor, cmd))
+          Homex.Entity.send_command(descriptor.id, command(descriptor, cmd))
 
         nil ->
           :ok
@@ -104,8 +104,8 @@ if Code.ensure_loaded?(Kino.JS) do
 
     defp load(ctx) do
       descriptors = Homex.descriptors() |> Enum.sort_by(& &1.name)
-      values = Map.new(descriptors, &{&1.name, Homex.Entity.snapshot(&1.name)})
-      images = for {name, %{image: i}} <- values, is_binary(i), into: %{}, do: {name, i}
+      values = Map.new(descriptors, &{&1.id, Homex.Entity.snapshot(&1.id)})
+      images = for {id, %{image: i}} <- values, is_binary(i), into: %{}, do: {id, i}
 
       assign(ctx, descriptors: descriptors, values: values, images: images)
     end
@@ -117,10 +117,10 @@ if Code.ensure_loaded?(Kino.JS) do
         ctx.assigns.descriptors
         |> Enum.group_by(& &1.device)
         |> Enum.sort()
-        |> Enum.map(fn {id, group} ->
+        |> Enum.map(fn {device_id, group} ->
           %{
-            name: if(device = devices[id], do: device.name, else: to_string(id)),
-            cards: Enum.map(group, &card(&1, ctx.assigns.values[&1.name]))
+            name: if(device = devices[device_id], do: device.name, else: to_string(device_id)),
+            cards: Enum.map(group, &card(&1, ctx.assigns.values[&1.id]))
           }
         end)
 

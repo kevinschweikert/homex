@@ -4,7 +4,7 @@ defmodule Homex.Entity.SwitchTest do
   alias Homex.Entity.Switch
 
   defmodule TestSwitch do
-    use Homex.Entity.Switch, name: "test-switch"
+    use Homex.Entity.Switch, id: :test_switch, name: "Test Switch"
 
     @impl Homex.Entity.Switch
     def handle_on(entity) do
@@ -20,7 +20,7 @@ defmodule Homex.Entity.SwitchTest do
   end
 
   defmodule SimpleSwitch do
-    use Homex.Entity.Switch, name: "simple-switch"
+    use Homex.Entity.Switch, id: :simple_switch, name: "Simple Switch"
   end
 
   setup do
@@ -35,45 +35,46 @@ defmodule Homex.Entity.SwitchTest do
     assert {:ok,
             %Descriptor{
               kind: :switch,
-              name: "test-switch",
+              id: :test_switch,
+              name: "Test Switch",
               fields: %{state: :state}
-            }} = Homex.descriptor("test-switch")
+            }} = Homex.descriptor(:test_switch)
   end
 
   test "a command runs set_* before handle_* and publishes the committed diff" do
-    Entity.send_command("test-switch", %{state: true})
+    Entity.send_command(:test_switch, %{state: true})
 
     assert_receive {:handle_on, %{state: true}}
     assert_receive {:homex, :state, %Descriptor{kind: :switch}, _, %{state: true}}
-    assert Entity.snapshot("test-switch") == %{state: true}
+    assert Entity.snapshot(:test_switch) == %{state: true}
   end
 
   test "an unchanged state still fires the callback but is not re-published" do
-    Entity.send_command("test-switch", %{state: true})
+    Entity.send_command(:test_switch, %{state: true})
     assert_receive {:homex, :state, _, _, %{state: true}}
 
-    Entity.send_command("test-switch", %{state: true})
+    Entity.send_command(:test_switch, %{state: true})
     assert_receive {:handle_on, _}
-    refute_receive {:homex, :state, %Descriptor{name: "test-switch"}, _, _}
+    refute_receive {:homex, :state, %Descriptor{id: :test_switch}, _, _}
   end
 
   test "turning off after on publishes both transitions" do
-    Entity.send_command("test-switch", %{state: true})
+    Entity.send_command(:test_switch, %{state: true})
     assert_receive {:homex, :state, _, _, %{state: true}}
 
-    Entity.send_command("test-switch", %{state: false})
+    Entity.send_command(:test_switch, %{state: false})
     assert_receive {:handle_off, %{state: false}}
     assert_receive {:homex, :state, _, _, %{state: false}}
   end
 
   test "unknown command maps are ignored" do
-    Entity.send_command("test-switch", %{bogus: true})
-    refute_receive {:homex, :state, %Descriptor{name: "test-switch"}, _, _}
+    Entity.send_command(:test_switch, %{bogus: true})
+    refute_receive {:homex, :state, %Descriptor{id: :test_switch}, _, _}
   end
 
   describe "handle_command/2" do
     test "records the state change and dispatches to the entity module" do
-      {:ok, entity} = Entity.new({TestSwitch, name: "fn-switch"})
+      {:ok, entity} = Entity.new({TestSwitch, id: :fn_switch, name: "Fn Switch"})
       entity = Switch.handle_command(%{state: true}, entity)
 
       assert entity.changes == %{state: true}
@@ -81,19 +82,19 @@ defmodule Homex.Entity.SwitchTest do
     end
 
     test "records the change even without user callbacks" do
-      {:ok, entity} = SimpleSwitch.new(name: "fn-switch")
+      {:ok, entity} = SimpleSwitch.new(id: :fn_switch, name: "Fn Switch")
       assert Switch.handle_command(%{state: false}, entity).changes == %{state: false}
     end
 
     test "leaves the entity untouched on unknown commands" do
-      {:ok, entity} = Switch.new(name: "fn-switch")
+      {:ok, entity} = Switch.new(id: :fn_switch, name: "Fn Switch")
       assert Switch.handle_command(%{bogus: true}, entity) == entity
     end
   end
 
   describe "setup/1" do
     test "defaults the switch to off" do
-      {:ok, entity} = SimpleSwitch.new(name: "fn-switch")
+      {:ok, entity} = SimpleSwitch.new(id: :fn_switch, name: "Fn Switch")
       assert Switch.setup(entity).changes == %{state: false}
     end
   end

@@ -1,9 +1,6 @@
 defmodule Homex.Config do
   @config_schema [
-                   # TODO: rethink if node_id is really the best name
-                   # the node as a concept is already in OTP
-                   # maybe instance_id?
-                   node_id: [
+                   id: [
                      required: true,
                      type: :string,
                      doc: "Identifies this homex instance to Home Assistant."
@@ -57,14 +54,14 @@ defmodule Homex.Config do
   @moduledoc "#{NimbleOptions.docs(@config_schema)}"
 
   @type t() :: %__MODULE__{
-          node_id: String.t(),
+          id: String.t(),
           devices: %{Homex.Device.id() => Homex.Device.t()},
           origin: map(),
           entities: [module() | Keyword.t()],
           adapters: [module() | {module(), keyword()}]
         }
 
-  defstruct [:node_id, :devices, :origin, :entities, :adapters]
+  defstruct [:id, :devices, :origin, :entities, :adapters]
 
   @doc false
   @spec new(Keyword.t()) :: t()
@@ -73,7 +70,7 @@ defmodule Homex.Config do
     origin = config |> make_origin_config()
 
     %__MODULE__{
-      node_id: config[:node_id],
+      id: config[:id],
       devices: config |> make_devices_config(),
       origin: origin,
       entities: config[:entities],

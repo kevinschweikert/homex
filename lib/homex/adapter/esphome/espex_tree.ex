@@ -50,7 +50,7 @@ defmodule Homex.Adapter.ESPHome.EspexTree do
       end
 
     [
-      name: Homex.node_id(),
+      name: Homex.instance_id(),
       friendly_name: default.name,
       manufacturer: default.manufacturer,
       model: default.model,

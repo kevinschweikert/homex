@@ -3,7 +3,8 @@ defmodule Homex.Entity.SensorTest do
 
   defmodule TestSensor do
     use Homex.Entity.Sensor,
-      name: "test-sensor",
+      id: :test_sensor,
+      name: "Test Sensor",
       device_class: "temperature",
       unit_of_measurement: "°C"
 
@@ -21,37 +22,38 @@ defmodule Homex.Entity.SensorTest do
     assert {:ok,
             %Descriptor{
               kind: :sensor,
-              name: "test-sensor",
+              id: :test_sensor,
+              name: "Test Sensor",
               fields: %{state: :state},
               options: %{device_class: "temperature", unit_of_measurement: "°C"}
-            }} = Homex.descriptor("test-sensor")
+            }} = Homex.descriptor(:test_sensor)
   end
 
   test "set_value publishes the committed diff" do
-    Homex.notify("test-sensor", {:set_value, 21.5})
+    Homex.notify(:test_sensor, {:set_value, 21.5})
 
     assert_receive {:homex, :state, %Descriptor{kind: :sensor}, _, %{state: 21.5}}
-    assert Entity.snapshot("test-sensor") == %{state: 21.5}
+    assert Entity.snapshot(:test_sensor) == %{state: 21.5}
   end
 
   test "an unchanged value is not re-published" do
-    Homex.notify("test-sensor", {:set_value, 21.5})
+    Homex.notify(:test_sensor, {:set_value, 21.5})
     assert_receive {:homex, :state, _, _, %{state: 21.5}}
 
-    Homex.notify("test-sensor", {:set_value, 21.5})
-    refute_receive {:homex, :state, %Descriptor{name: "test-sensor"}, _, _}
+    Homex.notify(:test_sensor, {:set_value, 21.5})
+    refute_receive {:homex, :state, %Descriptor{id: :test_sensor}, _, _}
   end
 
   test "sensors ignore inbound commands" do
-    Entity.send_command("test-sensor", %{state: 99})
-    refute_receive {:homex, :state, %Descriptor{name: "test-sensor"}, _, _}
+    Entity.send_command(:test_sensor, %{state: 99})
+    refute_receive {:homex, :state, %Descriptor{id: :test_sensor}, _, _}
   end
 
   describe "set_value/2" do
     alias Homex.Entity.Sensor
 
     test "records the typed value as a change" do
-      {:ok, entity} = Sensor.new(name: "fn-sensor")
+      {:ok, entity} = Sensor.new(id: :fn_sensor, name: "Fn Sensor")
       assert Sensor.set_value(entity, 21.5).changes == %{state: 21.5}
     end
   end

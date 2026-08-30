@@ -8,8 +8,11 @@ defmodule Homex.Descriptor do
 
     * `:kind` - The entity kind, for example `:sensor`. Each adapter uses it to
       select the platform module that serves the entity.
-    * `:name` - The unique name of the entity. Homex registers the entity under
-      this name. The adapters make the Home Assistant identifiers from it.
+    * `:id` - The unique id of the entity. Homex registers the entity under this
+      id, and the adapters derive the Home Assistant identifiers from it. Stable
+      identity, independent of the display name.
+    * `:name` - The display name of the entity, shown in Home Assistant. Free to
+      change without the entity losing its identity.
     * `:device` - The id of the `Homex.Device` that the entity belongs to.
     * `:fields` - The value keys of the entity, and the type of each key. Homex
       publishes a `:state` key only when the value changes. It publishes an
@@ -22,7 +25,8 @@ defmodule Homex.Descriptor do
 
       %Homex.Descriptor{
         kind: :sensor,
-        name: "living-room-temperature",
+        id: :living_room_temperature,
+        name: "Living Room Temperature",
         device: :default,
         fields: %{state: :state},
         options: %{
@@ -34,13 +38,10 @@ defmodule Homex.Descriptor do
       }
   """
 
-  # TODO:
-  # evaluate if maybe name should be an atom
-  # and also be named entity_id so it mirrors node_id
-
   @type t() :: %__MODULE__{
           kind: atom(),
           fields: %{atom() => :state | :event},
+          id: atom(),
           name: String.t(),
           device: atom(),
           options: map(),
@@ -50,6 +51,7 @@ defmodule Homex.Descriptor do
   defstruct [
     :kind,
     :fields,
+    :id,
     :name,
     :device,
     :options,

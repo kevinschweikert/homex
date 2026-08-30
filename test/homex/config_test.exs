@@ -5,14 +5,14 @@ defmodule Homex.ConfigTest do
 
   describe "new/1" do
     test "default device available" do
-      config = Config.new(node_id: "config-test", devices: [default: [name: "Testing"]])
+      config = Config.new(id: "config-test", devices: [default: [name: "Testing"]])
       assert config.devices[:default].name == "Testing"
     end
 
     test "entities accept bare modules and keyword lists" do
       config =
         Config.new(
-          node_id: "config-test",
+          id: "config-test",
           entities: [MySwitch, [name: :pod_switch, impl: MySwitch]]
         )
 

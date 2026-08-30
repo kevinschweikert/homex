@@ -49,7 +49,8 @@ defmodule Homex.Entity.Sensor do
   ```elixir
   defmodule MyTemperature do
     use Homex.Entity.Sensor,
-      name: "my-temperature",
+      id: :my_temperature,
+      name: "My Temperature",
       unit_of_measurement: "°C",
       device_class: "temperature"
 

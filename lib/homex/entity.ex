@@ -53,7 +53,7 @@ defmodule Homex.Entity do
   functions in the import list of `__entity__/3`:
 
       defmodule MyApp.Clicks do
-        use MyApp.Counter, name: "clicks"
+        use MyApp.Counter, id: :clicks, name: "Clicks"
 
         def handle_info({:clicked, count}, entity), do: set_count(entity, count)
       end
@@ -200,22 +200,24 @@ defmodule Homex.Entity do
   @doc false
   def __new__(kind, module, opts) do
     with {:ok, validated} <- kind.validate(opts) do
-      descriptor = %{kind.describe(validated) | device: validated[:device]}
+      descriptor = %{kind.describe(validated) | id: validated[:id], device: validated[:device]}
       {:ok, %__MODULE__{module: module, descriptor: descriptor}}
     end
   end
 
   @doc "The current values of the entity, or `nil` when it is no longer running"
-  def snapshot(name) do
-    case Homex.call(name, {:homex, :snapshot}) do
+  @spec snapshot(atom()) :: map() | nil
+  def snapshot(id) do
+    case Homex.call(id, {:homex, :snapshot}) do
       %{} = values -> values
       {:error, :not_found} -> nil
     end
   end
 
   @doc "Delivers a command map to the entity"
-  def send_command(name, cmd) do
-    Homex.notify(name, {:homex, :command, cmd})
+  @spec send_command(atom(), map()) :: :ok | {:error, :not_found}
+  def send_command(id, cmd) do
+    Homex.notify(id, {:homex, :command, cmd})
   end
 
   @doc """
@@ -246,7 +248,12 @@ defmodule Homex.Entity do
   @spec base_opts_schema() :: keyword()
   def base_opts_schema do
     [
-      name: [required: true, type: :string, doc: "the name of the entity"],
+      id: [
+        required: true,
+        type: :atom,
+        doc: "the unique id of the entity, used as the registry lookup key"
+      ],
+      name: [required: true, type: :string, doc: "the display name of the entity"],
       device: [
         required: false,
         type: :atom,
@@ -308,7 +315,7 @@ defmodule Homex.Entity do
 
   def child_spec(%__MODULE__{} = entity) do
     %{
-      id: {__MODULE__, entity.descriptor.name},
+      id: {__MODULE__, entity.descriptor.id},
       start: {__MODULE__, :start_link, [entity]},
       restart: :transient
     }
@@ -319,7 +326,7 @@ defmodule Homex.Entity do
   @impl GenServer
   def init(%__MODULE__{module: module, descriptor: descriptor} = entity) do
     with {:ok, _pid} <-
-           Registry.register(Homex.EntityRegistry, descriptor.name, descriptor) do
+           Registry.register(Homex.EntityRegistry, descriptor.id, descriptor) do
       values = Map.new(descriptor.fields, fn {key, _kind} -> {key, nil} end)
       entity = %{entity | descriptor: descriptor, values: values}
       {:ok, entity |> module.setup() |> execute_change()}
@@ -333,7 +340,7 @@ defmodule Homex.Entity do
 
   # unregistering here is synchronous, unlike the registry cleanup after death
   def handle_call({:homex, :remove}, _from, entity) do
-    Registry.unregister(Homex.EntityRegistry, entity.descriptor.name)
+    Registry.unregister(Homex.EntityRegistry, entity.descriptor.id)
     {:stop, :normal, :ok, entity}
   end
 

@@ -6,7 +6,7 @@ defmodule Homex.Adapter.MQTTTest do
   alias Homex.Adapter.MQTT
 
   @devices Homex.Config.new(
-             node_id: "mqtt-test",
+             id: "mqtt-test",
              devices: [
                default: [name: "Node", manufacturer: "acme"],
                kitchen: [name: "Kitchen", via: :default],

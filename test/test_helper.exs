@@ -5,7 +5,7 @@
       {Registry,
        name: Homex.EntityRegistry,
        keys: :unique,
-       meta: [node_id: "test", devices: %{default: elem(Homex.Device.new(:default), 1)}]},
+       meta: [id: "test", devices: %{default: elem(Homex.Device.new(:default), 1)}]},
       {Registry, name: Homex.Subscribers, keys: :duplicate},
       {DynamicSupervisor, name: Homex.EntitySupervisor, strategy: :one_for_one},
       {DynamicSupervisor, name: Homex.AdapterSupervisor, strategy: :one_for_one}

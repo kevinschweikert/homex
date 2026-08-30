@@ -40,7 +40,7 @@ defmodule Homex.Entity.Button do
 
   ```elixir
   defmodule MyButton do
-    use Homex.Entity.Button, name: "my-button"
+    use Homex.Entity.Button, id: :my_button, name: "My Button"
 
     def handle_press(entity) do
       IO.puts("my button was pressed")
