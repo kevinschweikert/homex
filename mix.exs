@@ -52,7 +52,7 @@ defmodule Homex.MixProject do
       main: "readme",
       source_url: @source_url,
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: ["README.md", "CHANGELOG.md", {"livebooks/intro.livemd", [title: "Intro Livebook"]}],
       assets: %{"assets" => "assets"},
       groups_for_modules: [
         Core: [

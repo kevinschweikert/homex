@@ -22,7 +22,6 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
     for {module, descriptor} <- supported(), do: Platform.list_entity(module, descriptor)
   end
 
-  # an entity can exit after the lookup, and a button has no state frame
   @impl Espex.EntityProvider
   def initial_states do
     for {module, descriptor} <- supported(),
@@ -31,7 +30,6 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
         do: frame
   end
 
-  # the entity owns the state, so its commit broadcast sends the state frame
   @impl Espex.EntityProvider
   def handle_command(%{key: key} = request) do
     with {module, %Descriptor{} = descriptor} <- entity_for_key(key),
@@ -59,10 +57,8 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
     {:noreply, server}
   end
 
-  # `Reloader` handles `:entities_changed` and `:devices_changed`
   def handle_info(_msg, server), do: {:noreply, server}
 
-  # the entities this adapter can serve, with their platform
   defp supported do
     for %Descriptor{kind: kind} = descriptor <- Homex.descriptors(),
         module = @platforms[kind],

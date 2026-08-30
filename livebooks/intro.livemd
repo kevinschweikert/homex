@@ -2,7 +2,7 @@
 
 ```elixir
 Mix.install([
-  {:homex, path: __DIR__},
+  {:homex, github: "kevinschweikert/homex"},
   {:req, "~> 0.6.2"},
   {:kino, "~> 0.19.0"},
   {:espex, "~> 0.9.0"},
@@ -101,7 +101,7 @@ defmodule MyCamera do
   def handle_capture(entity), do: snap(entity)
 
   defp snap(entity) do
-    %{body: image} = Req.get!("https://picsum.photos/200")
+    %{body: image} = Req.get!("https://picsum.photos/200", redirect_log_level: false)
     entity |> set_image(image) |> set_attributes(%{bytes: byte_size(image)})
   end
 end
@@ -113,7 +113,6 @@ end
     node_id: "livebook",
     devices: [default: [name: "Livebook"]],
     adapters: [
-      {Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]},
       {Homex.Adapter.ESPHome, mdns: :system}
     ],
     entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
