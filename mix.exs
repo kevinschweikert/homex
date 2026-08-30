@@ -1,7 +1,7 @@
 defmodule Homex.MixProject do
   use Mix.Project
 
-  @version "0.1.2"
+  @version "0.2.0-dev"
   @source_url "https://github.com/kevinschweikert/homex"
 
   def project do
