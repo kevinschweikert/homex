@@ -255,7 +255,16 @@ defmodule Homex do
 
   @doc "`add_entity/1` for a list, notifying the adapters once at the end"
   def add_entities(entities) do
-    Enum.each(entities, &start_entity/1)
+    Enum.each(entities, fn spec ->
+      case start_entity(spec) do
+        {:error, reason} ->
+          Logger.error("entity #{inspect(spec)} failed to start: #{inspect(reason)}")
+
+        _ok ->
+          :ok
+      end
+    end)
+
     notify_entities_changed()
   end
 
@@ -269,12 +278,17 @@ defmodule Homex do
     start_adapter(opts)
   end
 
-  # TODO: start_adapter/1 can return {:error, reason} (DynamicSupervisor.start_child
-  # catches the child's crash instead of raising) and Enum.each discards it silently —
-  # a broken adapter currently boots as if nothing happened. Surface/log the failure.
   @doc "`add_adapter/1` for a list"
   def add_adapters(adapters) do
-    Enum.each(adapters, &start_adapter/1)
+    Enum.each(adapters, fn spec ->
+      case start_adapter(spec) do
+        {:error, reason} ->
+          Logger.error("adapter #{inspect(spec)} failed to start: #{inspect(reason)}")
+
+        _ok ->
+          :ok
+      end
+    end)
   end
 
   @doc """
