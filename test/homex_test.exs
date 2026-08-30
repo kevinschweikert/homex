@@ -1,6 +1,7 @@
 defmodule HomexTest do
-  # `{:homex, :entities_changed}` carries no discriminator, so this module
-  # cannot run concurrently with anything else that adds or removes entities.
+  # neither `{:homex, :entities_changed}` nor `{:homex, :devices_changed}` carries
+  # a discriminator, so this module cannot run concurrently with anything else
+  # that adds/removes entities or devices.
   use Homex.EntityCase, async: false
   doctest Homex
 
@@ -25,17 +26,17 @@ defmodule HomexTest do
 
   test "put_device replaces and delete_device removes, notifying the adapters" do
     assert :ok = Homex.put_device(:office, name: "Office")
-    assert_receive {:homex, :entities_changed}
+    assert_receive {:homex, :devices_changed}
     assert %Homex.Device{name: "Office"} = Homex.devices()[:office]
 
     assert :ok = Homex.put_device(:office, name: "Renamed")
-    assert_receive {:homex, :entities_changed}
+    assert_receive {:homex, :devices_changed}
     assert %Homex.Device{name: "Renamed"} = Homex.devices()[:office]
 
     assert {:error, %NimbleOptions.ValidationError{}} = Homex.put_device(:office, name: :nope)
 
     assert :ok = Homex.delete_device(:office)
-    assert_receive {:homex, :entities_changed}
+    assert_receive {:homex, :devices_changed}
     refute Homex.devices()[:office]
   end
 

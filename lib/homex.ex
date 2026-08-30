@@ -59,7 +59,11 @@ defmodule Homex do
   ```
 
   The available options are documented in `Homex.Config`. Each adapter documents
-  its own options — see `Homex.Adapter.MQTT`.
+  its own options — see `Homex.Adapter.MQTT` and `Homex.Adapter.ESPHome`.
+
+  Home Assistant finds an ESPHome adapter over mDNS. Give it `mdns: :system` on
+  a desktop, a server or in a Livebook, and `mdns: :mdns_lite` on Nerves.
+  Without it you add the device to Home Assistant by its address.
 
   ## Usage
 
@@ -102,7 +106,10 @@ defmodule Homex do
           ...,
           {Homex,
            node_id: Homex.hostname(),
-           adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
+           adapters: [
+             {Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]},
+             {Homex.Adapter.ESPHome, mdns: :system}
+           ],
            entities: [MySwitch]},
           ...
         ]
@@ -116,8 +123,13 @@ defmodule Homex do
 
   @json_library if(Code.ensure_loaded?(JSON), do: JSON, else: Jason)
 
+  @doc false
   def encode!(encodable), do: @json_library.encode!(encodable)
+
+  @doc false
   def decode!(decodable), do: @json_library.decode!(decodable)
+
+  @doc false
   def decode(decodable), do: @json_library.decode(decodable)
 
   defp meta(key, default) do
@@ -127,6 +139,13 @@ defmodule Homex do
     end
   end
 
+  @doc """
+  The `:node_id` this instance was started with.
+
+  Adapters scope the identifiers they publish by it, so it is what keeps two
+  homex instances on the same broker or network apart. Raises when Homex is not
+  running.
+  """
   def node_id() do
     case meta(:node_id, nil) do
       nil -> raise "node id must be set"
@@ -134,12 +153,20 @@ defmodule Homex do
     end
   end
 
-  @doc false
+  @doc "The registered devices"
+  @spec devices() :: %{Homex.Device.id() => Homex.Device.t()}
   def devices(), do: meta(:devices, %{})
 
-  @doc false
+  @doc """
+  The `:origin` this instance was started with.
+
+  Identifies homex itself, rather than a device, to Home Assistant.
+  """
+  @spec origin() :: map()
   def origin(), do: meta(:origin, %{})
 
+  @doc "The descriptor of one running entity"
+  @spec descriptor(String.t()) :: {:ok, Homex.Descriptor.t()} | {:error, :not_found}
   def descriptor(name) do
     case Registry.lookup(Homex.EntityRegistry, name) do
       [{_pid, descriptor}] -> {:ok, descriptor}
@@ -164,6 +191,7 @@ defmodule Homex do
     end
   end
 
+  @doc "wraps `GenServer.cast/2` for the entity"
   def cast(name, msg) do
     case Registry.lookup(Homex.EntityRegistry, name) do
       [{pid, _value}] -> GenServer.cast(pid, msg)
@@ -171,38 +199,80 @@ defmodule Homex do
     end
   end
 
+  @doc "wraps `GenServer.call/2` for the entity"
   def call(name, msg) do
     case Registry.lookup(Homex.EntityRegistry, name) do
-      [{pid, _value}] -> GenServer.call(pid, msg)
+      [{pid, _value}] -> call_entity(pid, msg)
       _ -> {:error, :not_found}
     end
   end
 
+  # an entity can exit between the lookup and the call, which reads the same to the
+  # caller as a name that was never registered. A timeout still raises: that is an
+  # entity that is stuck, not one that is gone
+  defp call_entity(pid, msg) do
+    GenServer.call(pid, msg)
+  catch
+    :exit, {reason, {GenServer, :call, [^pid | _]}} when reason != :timeout ->
+      {:error, :not_found}
+  end
+
+  @doc """
+  Subscribes the calling process to the entity and device broadcasts.
+
+  This is how an adapter follows the running system. The subscriber receives:
+
+    * `{:homex, :state, descriptor, values, changes}` when an entity commits
+    * `{:homex, :entities_changed}` when an entity is added or removed
+    * `{:homex, :devices_changed}` when a device is added, replaced or removed
+
+  Neither `:entities_changed` nor `:devices_changed` says *what* changed — read
+  `descriptors/0` or `devices/0` back on receipt.
+  """
   def subscribe, do: Registry.register(Homex.Subscribers, :entities, nil)
 
+  @doc false
   def broadcast(msg) do
     Registry.dispatch(Homex.Subscribers, :entities, fn subscribers ->
       for {pid, _} <- subscribers, do: send(pid, msg)
     end)
   end
 
-  defp notify_subscribers(), do: Homex.broadcast({:homex, :entities_changed})
+  defp notify_entities_changed(), do: Homex.broadcast({:homex, :entities_changed})
+  defp notify_devices_changed(), do: Homex.broadcast({:homex, :devices_changed})
 
+  @doc """
+  Starts an entity and tells the adapters to republish.
+
+  Takes an entity module or the keyword list of an inline definition — the same
+  shapes the `:entities` start option accepts.
+  """
   def add_entity(opts) do
     with :ok <- start_entity(opts) do
-      notify_subscribers()
+      notify_entities_changed()
     end
   end
 
+  @doc "`add_entity/1` for a list, notifying the adapters once at the end"
   def add_entities(entities) do
     Enum.each(entities, &start_entity/1)
-    notify_subscribers()
+    notify_entities_changed()
   end
 
+  @doc """
+  Starts an adapter.
+
+  Takes `module` or `{module, opts}` — the same shapes the `:adapters` start
+  option accepts.
+  """
   def add_adapter(opts) do
     start_adapter(opts)
   end
 
+  # TODO: start_adapter/1 can return {:error, reason} (DynamicSupervisor.start_child
+  # catches the child's crash instead of raising) and Enum.each discards it silently —
+  # a broken adapter currently boots as if nothing happened. Surface/log the failure.
+  @doc "`add_adapter/1` for a list"
   def add_adapters(adapters) do
     Enum.each(adapters, &start_adapter/1)
   end
@@ -220,7 +290,7 @@ defmodule Homex do
   def put_device(id, opts \\ []) do
     with {:ok, device} <- Homex.Device.new(id, opts) do
       Registry.put_meta(Homex.EntityRegistry, :devices, Map.put(devices(), id, device))
-      notify_subscribers()
+      notify_devices_changed()
     end
   end
 
@@ -233,7 +303,7 @@ defmodule Homex do
   @spec delete_device(Homex.Device.id()) :: :ok
   def delete_device(id) do
     Registry.put_meta(Homex.EntityRegistry, :devices, Map.delete(devices(), id))
-    notify_subscribers()
+    notify_devices_changed()
   end
 
   defp start_entity(spec) do
@@ -244,17 +314,20 @@ defmodule Homex do
     end
   end
 
+  @doc "Stops the entity and tells the adapters to republish"
+  @spec remove_entity(String.t()) :: :ok | {:error, :not_found}
   def remove_entity(name) do
     case Registry.lookup(Homex.EntityRegistry, name) do
       [{pid, _descriptor}] ->
         :ok = GenServer.call(pid, {:homex, :remove})
-        notify_subscribers()
+        notify_entities_changed()
 
       [] ->
         {:error, :not_found}
     end
   end
 
+  @doc false
   def start_adapter(spec), do: DynamicSupervisor.start_child(Homex.AdapterSupervisor, spec)
 
   @doc "The running adapters as `{module, pid}` pairs"
@@ -263,6 +336,8 @@ defmodule Homex do
         do: {module, pid}
   end
 
+  @doc "Stops the adapter"
+  @spec remove_adapter(pid() | module()) :: :ok | {:error, :not_found}
   def remove_adapter(pid) when is_pid(pid),
     do: DynamicSupervisor.terminate_child(Homex.AdapterSupervisor, pid)
 

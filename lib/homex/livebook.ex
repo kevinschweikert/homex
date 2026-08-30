@@ -50,12 +50,10 @@ if Code.ensure_loaded?(Kino.JS) do
       {:noreply, ctx}
     end
 
-    def handle_info({:homex, :entities_changed}, ctx) do
-      ctx = load(ctx)
-      broadcast_event(ctx, "layout", layout(ctx))
-      send(self(), {:images, nil})
-      {:noreply, ctx}
-    end
+    def handle_info({:homex, :entities_changed}, ctx), do: {:noreply, ctx |> load() |> relayout()}
+
+    # only the device sections move, the entities and their values are untouched
+    def handle_info({:homex, :devices_changed}, ctx), do: {:noreply, relayout(ctx)}
 
     def handle_info({:homex, :state, descriptor, values, changes}, ctx) do
       broadcast_event(ctx, "card", card(descriptor, values, changes))
@@ -96,6 +94,13 @@ if Code.ensure_loaded?(Kino.JS) do
 
     defp clamp("brightness", value) when is_number(value), do: value |> max(0) |> min(100)
     defp clamp(_field, value), do: value
+
+    # a layout event rebuilds the browser from scratch, dropping the images with it
+    defp relayout(ctx) do
+      broadcast_event(ctx, "layout", layout(ctx))
+      send(self(), {:images, nil})
+      ctx
+    end
 
     defp load(ctx) do
       descriptors = Homex.descriptors() |> Enum.sort_by(& &1.name)

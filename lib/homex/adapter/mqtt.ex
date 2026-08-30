@@ -357,7 +357,7 @@ defmodule Homex.Adapter.MQTT do
 
   def handle_info({:homex, :state, _, _, _}, state), do: {:noreply, state}
 
-  def handle_info({:homex, :entities_changed}, state) do
+  def handle_info({:homex, event}, state) when event in [:entities_changed, :devices_changed] do
     {:noreply, state, {:continue, :publish_discovery_config}}
   end
 

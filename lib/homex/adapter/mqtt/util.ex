@@ -1,4 +1,8 @@
 defmodule Homex.Adapter.MQTT.Util do
+  @moduledoc false
+
+  import Homex.Util, only: [slug: 1]
+
   alias Homex.Descriptor
   alias Homex.Device
 
@@ -17,13 +21,6 @@ defmodule Homex.Adapter.MQTT.Util do
   # unique per homex instance, stable across renames of the device itself.
   def device_identifier(node_id, %Device{id: id}) when is_binary(node_id) do
     "homex-#{slug(node_id)}-#{id}"
-  end
-
-  def slug(binary) when is_binary(binary) do
-    binary
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "_")
-    |> String.trim("_")
   end
 
   @doc """

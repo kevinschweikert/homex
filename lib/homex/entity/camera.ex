@@ -25,9 +25,9 @@ defmodule Homex.Entity.Camera do
                  image_encoding: [
                    required: false,
                    default: nil,
-                   type: {:or, [nil, :string]},
+                   type: {:in, [nil, :b64]},
                    doc:
-                     "The encoding of the image payloads received. Set to \"b64\" to enable base64 decoding of image payload. If not set, the image payload must be raw binary data."
+                     "The encoding of the image payloads received. Set to `:b64` to enable base64 decoding of image payload. If not set, the image payload must be raw binary data."
                  ]
                )
                |> NimbleOptions.new!()
@@ -64,8 +64,19 @@ defmodule Homex.Entity.Camera do
 
   alias Homex.Entity
 
+  @doc """
+  Gets called when the camera is asked to capture and send a fresh frame
+  """
+  @callback handle_capture(entity :: Entity.t()) :: entity :: Entity.t()
+
+  @optional_callbacks handle_capture: 1
+
   defmacro __using__(opts) do
-    Homex.Entity.__entity__(__MODULE__, opts, set_image: 2, set_attributes: 2)
+    quote do
+      unquote(Homex.Entity.__entity__(__MODULE__, opts, set_image: 2, set_attributes: 2))
+      def handle_capture(entity), do: entity
+      defoverridable handle_capture: 1
+    end
   end
 
   @impl Homex.Entity
@@ -92,6 +103,7 @@ defmodule Homex.Entity.Camera do
   def setup(%{module: m} = entity), do: m.handle_init(entity)
 
   @impl Homex.Entity
+  def handle_command(%{capture: true}, %{module: m} = entity), do: m.handle_capture(entity)
   def handle_command(_cmd, entity), do: entity
 
   @doc """

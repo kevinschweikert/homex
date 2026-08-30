@@ -55,6 +55,12 @@ defmodule Homex.MixProject do
       extras: ["README.md", "CHANGELOG.md"],
       assets: %{"assets" => "assets"},
       groups_for_modules: [
+        Core: [
+          Homex,
+          Homex.Config,
+          Homex.Device,
+          Homex.Descriptor
+        ],
         Entities: [
           Homex.Entity,
           Homex.Entity.Switch,
@@ -64,12 +70,13 @@ defmodule Homex.MixProject do
           Homex.Entity.Button,
           Homex.Entity.DeviceTrigger
         ],
+        Adapters: [
+          Homex.Adapter.MQTT,
+          Homex.Adapter.ESPHome,
+          Homex.Adapter.ESPHome.Mdns.SystemResponder
+        ],
         Livebook: [
           Homex.Livebook
-        ],
-        MQTT: [
-          Homex.Adapter.MQTT,
-          Homex.Adapter.MQTT.Util
         ]
       ]
     ]
@@ -78,12 +85,14 @@ defmodule Homex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:nimble_options, "~> 1.1"},
       {:emqtt, "~> 1.14.7", optional: true},
-      {:ex_doc, "~> 0.38", only: :docs},
       {:jason, "~> 1.4", optional: true},
       {:kino, "~> 0.19", optional: true},
-      {:nimble_options, "~> 1.1"}
+      {:espex, "~> 0.9.0", optional: true},
+      {:muontrap, "~> 2.0", optional: true},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.38", only: :docs}
     ]
   end
 end
