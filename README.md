@@ -29,8 +29,10 @@ def deps do
     {:emqtt, "~> 1.14.7"},
     # for the ESPHome adapter
     {:espex, "~> 0.9"},
-    # to advertise the ESPHome adapter over mDNS
+    # to advertise the ESPHome adapter with `mdns: :mdns_lite`
     {:mdns_lite, "~> 0.8"},
+    # to advertise the ESPHome adapter with `mdns: :system`
+    {:muontrap, "~> 2.0"},
     # for the Livebook dashboard
     {:kino, "~> 0.19"}
   ]
@@ -79,9 +81,14 @@ end
 ```
 
 Add `homex` to your supervision tree with your adapters and entities. See the
-`Homex.Config` module docs for the available options, and `Homex.Adapter.MQTT`
-for the broker settings. Entities can also be added/removed at runtime with
-`Homex.add_entity/1` or `Homex.remove_entity/1`.
+`Homex.Config` module docs for the available options, `Homex.Adapter.MQTT` for
+the broker settings and `Homex.Adapter.ESPHome` for the native API. Entities can
+also be added/removed at runtime with `Homex.add_entity/1` or
+`Homex.remove_entity/1`.
+
+Home Assistant finds an ESPHome adapter over mDNS. Give it `mdns: :system` on a
+desktop, a server or in a Livebook, and `mdns: :mdns_lite` on Nerves. Without it
+you add the device to Home Assistant by its address.
 
 ```elixir
 defmodule MyApp.Application do
@@ -94,7 +101,8 @@ defmodule MyApp.Application do
          node_id: Homex.hostname(),
          adapters: [
            {Homex.Adapter.MQTT,
-            broker: [host: "localhost", port: 1883, username: "admin", password: "admin"]}
+            broker: [host: "localhost", port: 1883, username: "admin", password: "admin"]},
+           {Homex.Adapter.ESPHome, mdns: :system}
          ],
          entities: [MySwitch]},
         ...

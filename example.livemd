@@ -5,7 +5,8 @@ Mix.install([
   {:homex, path: __DIR__},
   {:req, "~> 0.6.2"},
   {:kino, "~> 0.19.0"},
-  {:espex, "~> 0.9.0"}
+  {:espex, "~> 0.9.0"},
+  {:muontrap, "~> 2.0"}
 ])
 ```
 
@@ -113,7 +114,7 @@ end
     devices: [default: [name: "Livebook"]],
     adapters: [
       {Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]},
-      Homex.Adapter.ESPHome
+      {Homex.Adapter.ESPHome, mdns: :system}
     ],
     entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
   )

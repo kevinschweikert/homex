@@ -10,7 +10,7 @@ defmodule Homex.Adapter.ESPHome do
                       required: false,
                       type: :atom,
                       doc:
-                        "An `Espex.Mdns` adapter, for example `Espex.Mdns.MdnsLite`. If you do not set this option, homex does not advertise the instance. You must then add the device to Home Assistant by its address."
+                        "How homex advertises the instance. Use `:system` on a desktop, a server or in a Livebook, and `:mdns_lite` on Nerves. Any other atom is an `Espex.Mdns` adapter of your own. If you do not set this option, homex does not advertise the instance. You must then add the device to Home Assistant by its address."
                     ],
                     espex_opts: [
                       required: false,
@@ -28,21 +28,33 @@ defmodule Homex.Adapter.ESPHome do
   Home Assistant discovers homex as an ESPHome device. It then connects to homex
   with the native API.
 
-  This adapter needs `:espex`. The `:mdns` option also needs `:mdns_lite`. Homex
-  does not include these dependencies.
+  This adapter needs `:espex`. Homex does not include the dependency.
 
-      {:espex, "~> 0.9"},
-      {:mdns_lite, "~> 0.8"}
-
-  `:mdns_lite` does not operate in a Livebook. Do not set `:mdns` there. Add the
-  device to Home Assistant by its address.
+      {:espex, "~> 0.9"}
 
   Start the adapter from the `:adapters` option of `Homex`:
 
       {Homex,
        node_id: Homex.hostname(),
-       adapters: [{Homex.Adapter.ESPHome, mdns: Espex.Mdns.MdnsLite}],
+       adapters: [{Homex.Adapter.ESPHome, mdns: :system}],
        entities: [MySwitch]}
+
+  ## Advertising
+
+  Home Assistant finds the instance over mDNS. The `:mdns` option picks who
+  answers, and each choice needs a dependency of its own:
+
+    * `:system` - the responder of the operating system, through
+      `Homex.Adapter.ESPHome.Mdns.SystemResponder`. Use it on a desktop, a
+      server or in a Livebook. Needs `:muontrap`.
+    * `:mdns_lite` - the responder of `Espex.Mdns.MdnsLite`, which answers on
+      its own. Use it on Nerves, where nothing else holds port 5353. Needs
+      `:mdns_lite`.
+
+  Homex does not include either dependency.
+
+      {:muontrap, "~> 2.0"},
+      {:mdns_lite, "~> 0.8"}
 
   Use `:espex_opts` for espex options that homex does not have:
 
@@ -72,10 +84,14 @@ defmodule Homex.Adapter.ESPHome do
 
   use Supervisor
 
-  alias Homex.Adapter.ESPHome.{EspexTree, Reloader}
+  alias Homex.Adapter.ESPHome.{EspexTree, Mdns, Reloader}
 
   def start_link(opts \\ []) do
-    opts = NimbleOptions.validate!(opts, @options_schema)
+    opts =
+      opts
+      |> NimbleOptions.validate!(@options_schema)
+      |> Keyword.replace_lazy(:mdns, &mdns_adapter/1)
+
     Supervisor.start_link(__MODULE__, opts)
   end
 
@@ -88,4 +104,8 @@ defmodule Homex.Adapter.ESPHome do
 
     Supervisor.init(children, strategy: :one_for_one)
   end
+
+  defp mdns_adapter(:system), do: Mdns.SystemResponder
+  defp mdns_adapter(:mdns_lite), do: Espex.Mdns.MdnsLite
+  defp mdns_adapter(module), do: module
 end

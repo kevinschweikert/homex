@@ -72,7 +72,8 @@ defmodule Homex.MixProject do
         ],
         Adapters: [
           Homex.Adapter.MQTT,
-          Homex.Adapter.ESPHome
+          Homex.Adapter.ESPHome,
+          Homex.Adapter.ESPHome.Mdns.SystemResponder
         ],
         Livebook: [
           Homex.Livebook
@@ -89,6 +90,7 @@ defmodule Homex.MixProject do
       {:jason, "~> 1.4", optional: true},
       {:kino, "~> 0.19", optional: true},
       {:espex, "~> 0.9.0", optional: true},
+      {:muontrap, "~> 2.0", optional: true},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :docs}
     ]

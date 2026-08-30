@@ -59,7 +59,11 @@ defmodule Homex do
   ```
 
   The available options are documented in `Homex.Config`. Each adapter documents
-  its own options — see `Homex.Adapter.MQTT`.
+  its own options — see `Homex.Adapter.MQTT` and `Homex.Adapter.ESPHome`.
+
+  Home Assistant finds an ESPHome adapter over mDNS. Give it `mdns: :system` on
+  a desktop, a server or in a Livebook, and `mdns: :mdns_lite` on Nerves.
+  Without it you add the device to Home Assistant by its address.
 
   ## Usage
 
@@ -102,7 +106,10 @@ defmodule Homex do
           ...,
           {Homex,
            node_id: Homex.hostname(),
-           adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
+           adapters: [
+             {Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]},
+             {Homex.Adapter.ESPHome, mdns: :system}
+           ],
            entities: [MySwitch]},
           ...
         ]
