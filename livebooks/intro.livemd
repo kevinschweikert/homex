@@ -3,10 +3,12 @@
 ```elixir
 Mix.install([
   {:homex, github: "kevinschweikert/homex"},
+  # needed for ESPHome adapter
+  {:espex, "~> 0.9.0"},
+  # needed for ESPHome autodiscovery
+  {:muontrap, "~> 2.0"},
   {:req, "~> 0.6.2"},
   {:kino, "~> 0.19.0"},
-  {:espex, "~> 0.9.0"},
-  {:muontrap, "~> 2.0"}
 ])
 ```
 
@@ -91,6 +93,17 @@ defmodule MyDevice do
   use Homex.Entity.DeviceTrigger, id: :reed_switch, name: "Door Opened"
 end
 
+defmodule MyText do
+  use Homex.Entity.Text, id: :greeting, name: "Greeting"
+
+  def handle_init(entity), do: set_text(entity, "World")
+
+  def handle_text(entity, text) do
+    IO.puts("Hello #{text}")
+    entity
+  end
+end
+
 defmodule MyCamera do
   use Homex.Entity.Camera, id: :ov2640, name: "Front Door Surveillance"
 
@@ -114,19 +127,74 @@ end
   Homex.start_link(
     id: "livebook",
     devices: [default: [name: "Livebook"]],
-    adapters: [
-      {Homex.Adapter.ESPHome, mdns: :system}
-    ],
-    entities: [MySwitch, MyTemperature, MyHumidity, MyButton, MyLight, MyDevice, MyCamera]
+    adapters: [{Homex.Adapter.ESPHome, mdns: :system}],
+    entities: [
+      MySwitch,
+      MyTemperature,
+      MyHumidity,
+      MyButton,
+      MyLight,
+      MyDevice,
+      MyCamera,
+      MyText
+    ]
   )
 ```
 
 ## Dashboard
 
+Let's have a look at our entities. Each card live updates when you change
+a value in Homeassistant and vice versa. Try it!
+
 ```elixir
 Homex.Livebook.new()
 ```
 
+You can get the latest state of an entity with `Homex.snapshot/1`.
+
 ```elixir
 Homex.Entity.snapshot(:bme280_temp)
+```
+
+## Adding entities at runtime
+
+Entities don't have to be listed at start time. `Homex.add_entity/1` and
+`Homex.add_entities/1` start an entity under the same supervision tree and
+tell the adapters to republish, so it shows up right away without a restart.
+
+```elixir
+defmodule MyNumber do
+  use Homex.Entity.Number, id: :brightness, name: "Brightness", min: 0, max: 100, step: 1
+
+  def handle_init(entity) do
+    %{brightness: brightness} = Entity.snapshot(:ws2812)
+    set_number(entity, brightness)
+  end
+
+  def handle_number(entity, number) do
+    Entity.send_command(:ws2812, %{brightness: number})
+    entity
+  end
+end
+
+defmodule MySelect do
+  use Homex.Entity.Select, id: :mode, name: "Mode", options: ["on", "off"]
+
+  def handle_init(entity) do
+    %{state: state} = Entity.snapshot(:ws2812)
+    set_option(entity, if(state, do: "on", else: "off"))
+  end
+
+  def handle_option(entity, "on") do
+    Entity.send_command(:ws2812, %{state: true})
+    entity
+  end
+
+  def handle_option(entity, "off") do
+    Entity.send_command(:ws2812, %{state: false})
+    entity
+  end
+end
+
+Homex.add_entities([MyNumber, MySelect])
 ```
