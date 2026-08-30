@@ -6,17 +6,17 @@ defmodule HomexTest do
   doctest Homex
 
   defmodule LifecycleSwitch do
-    use Homex.Entity.Switch, name: "lifecycle-switch"
+    use Homex.Entity.Switch, id: :lifecycle_switch, name: "Lifecycle Switch"
   end
 
   test "add_entity and remove_entity notify the adapters" do
     assert :ok = Homex.add_entity(LifecycleSwitch)
     assert_receive {:homex, :entities_changed}
-    assert {:ok, %Homex.Descriptor{kind: :switch}} = Homex.descriptor("lifecycle-switch")
+    assert {:ok, %Homex.Descriptor{kind: :switch}} = Homex.descriptor(:lifecycle_switch)
 
-    assert :ok = Homex.remove_entity("lifecycle-switch")
+    assert :ok = Homex.remove_entity(:lifecycle_switch)
     assert_receive {:homex, :entities_changed}
-    assert {:error, :not_found} = Homex.descriptor("lifecycle-switch")
+    assert {:error, :not_found} = Homex.descriptor(:lifecycle_switch)
   end
 
   test "adding an invalid entity returns an error and notifies nothing" do
@@ -41,6 +41,6 @@ defmodule HomexTest do
   end
 
   test "removing an unknown entity returns an error" do
-    assert {:error, :not_found} = Homex.remove_entity("does-not-exist")
+    assert {:error, :not_found} = Homex.remove_entity(:does_not_exist)
   end
 end

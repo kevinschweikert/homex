@@ -27,7 +27,7 @@ defmodule Homex.Entity.Switch do
 
   ```elixir
   defmodule MySwitch do
-    use Homex.Entity.Switch, name: "my-switch"
+    use Homex.Entity.Switch, id: :my_switch, name: "My Switch"
 
     def handle_on(entity) do
       IO.puts("Switch turned on")

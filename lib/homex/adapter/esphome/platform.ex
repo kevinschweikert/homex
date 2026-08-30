@@ -19,7 +19,7 @@ defmodule Homex.Adapter.ESPHome.Platform do
   def device_id(:default), do: 0
 
   def device_id(device_id) when is_atom(device_id) do
-    1 + :erlang.phash2({Homex.node_id(), device_id}, @key_space - 1)
+    1 + :erlang.phash2({Homex.instance_id(), device_id}, @key_space - 1)
   end
 
   @doc """
@@ -38,7 +38,7 @@ defmodule Homex.Adapter.ESPHome.Platform do
   If the key changes, Home Assistant makes a new entity and the old entity becomes
   stale. `Homex.Adapter.MQTT.Util.component_identifier/2` has the same contract.
   """
-  def key(name) when is_binary(name), do: :erlang.phash2({Homex.node_id(), name}, @key_space)
+  def key(id) when is_atom(id), do: :erlang.phash2({Homex.instance_id(), id}, @key_space)
 
   @doc """
   The advertisement for one entity.
@@ -47,10 +47,10 @@ defmodule Homex.Adapter.ESPHome.Platform do
   kinds share. Because of this, the advertisement and the state frames always use
   the same key.
   """
-  def list_entity(module, %Descriptor{name: name, device: device} = descriptor) do
+  def list_entity(module, %Descriptor{id: id, name: name, device: device} = descriptor) do
     struct(module.list_entity(descriptor),
       object_id: slug(name),
-      key: key(name),
+      key: key(id),
       name: name,
       device_id: device_id(device)
     )
@@ -64,10 +64,10 @@ defmodule Homex.Adapter.ESPHome.Platform do
   """
   def state(nil, _descriptor, _values), do: nil
 
-  def state(module, %Descriptor{name: name} = descriptor, values) do
+  def state(module, %Descriptor{id: id} = descriptor, values) do
     case module.state(descriptor, values) do
       nil -> nil
-      frame -> %{frame | key: key(name)}
+      frame -> %{frame | key: key(id)}
     end
   end
 end

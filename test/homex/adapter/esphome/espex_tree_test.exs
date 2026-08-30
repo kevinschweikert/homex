@@ -4,7 +4,7 @@ defmodule Homex.Adapter.ESPHome.EspexTreeTest do
   alias Homex.Adapter.ESPHome.{EspexTree, Platform}
 
   @devices Homex.Config.new(
-             node_id: "esphome-test",
+             id: "esphome-test",
              devices: [
                default: [name: "Node", manufacturer: "acme", model: "Homex"],
                kitchen: [name: "Kitchen"]

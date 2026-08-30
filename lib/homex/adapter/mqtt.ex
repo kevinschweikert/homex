@@ -42,7 +42,7 @@ defmodule Homex.Adapter.MQTT do
   Start it from the `:adapters` option of `Homex`:
 
       {Homex,
-       node_id: Homex.hostname(),
+       id: Homex.hostname(),
        adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
        entities: [MySwitch]}
 
@@ -74,7 +74,7 @@ defmodule Homex.Adapter.MQTT do
     :emqtt_opts,
     :emqtt_ref,
     :discovery_prefix,
-    :node_id,
+    :instance_id,
     connected: false,
     subscriptions: %{},
     devices: %{}
@@ -101,9 +101,9 @@ defmodule Homex.Adapter.MQTT do
 
   # Everything a platform needs for one descriptor. `nil` for an unknown kind, so
   # the callers can use it as a filter.
-  defp resolve(node_id, %Homex.Descriptor{} = descriptor) do
+  defp resolve(instance_id, %Homex.Descriptor{} = descriptor) do
     if mod = platform(descriptor) do
-      {identifier, topic_builder} = Util.identity(node_id, descriptor)
+      {identifier, topic_builder} = Util.identity(instance_id, descriptor)
 
       topics =
         Map.new(mod.segments(descriptor), fn {key, segments} ->
@@ -143,7 +143,7 @@ defmodule Homex.Adapter.MQTT do
      %__MODULE__{
        emqtt_opts: emqtt_opts(opts[:broker], opts[:client_opts]),
        discovery_prefix: opts[:discovery_prefix],
-       node_id: Homex.node_id()
+       instance_id: Homex.instance_id()
      }, {:continue, :connect}}
   end
 
@@ -189,7 +189,7 @@ defmodule Homex.Adapter.MQTT do
         %__MODULE__{
           emqtt_pid: emqtt_pid,
           discovery_prefix: discovery_prefix,
-          node_id: node_id,
+          instance_id: instance_id,
           devices: old_devices
         } = state
       ) do
@@ -225,8 +225,8 @@ defmodule Homex.Adapter.MQTT do
         old_state = Map.get(old_devices, device_id, %DeviceState{})
 
         new_state = %DeviceState{
-          components: build_components(node_id, entries),
-          subscriptions: build_subscriptions(node_id, entries)
+          components: build_components(instance_id, entries),
+          subscriptions: build_subscriptions(instance_id, entries)
         }
 
         for topic <- Map.keys(new_state.subscriptions) -- Map.keys(old_state.subscriptions) do
@@ -243,7 +243,7 @@ defmodule Homex.Adapter.MQTT do
         tombstones =
           Map.new(stale_components, fn {key, val} -> {key, Map.take(val, [:platform])} end)
 
-        device_config = device_config(node_id, known_devices, device)
+        device_config = device_config(instance_id, known_devices, device)
 
         discovery_config = %{
           device: device_config,
@@ -270,8 +270,8 @@ defmodule Homex.Adapter.MQTT do
     {:noreply, %{state | subscriptions: subscriptions, devices: devices}}
   end
 
-  defp build_components(node_id, entries) do
-    for descriptor <- entries, resolved = resolve(node_id, descriptor), into: %{} do
+  defp build_components(instance_id, entries) do
+    for descriptor <- entries, resolved = resolve(instance_id, descriptor), into: %{} do
       %{mod: mod, identifier: identifier, topics: topics} = resolved
 
       component =
@@ -284,9 +284,9 @@ defmodule Homex.Adapter.MQTT do
     end
   end
 
-  defp build_subscriptions(node_id, entries) do
+  defp build_subscriptions(instance_id, entries) do
     for descriptor <- entries,
-        resolved = resolve(node_id, descriptor),
+        resolved = resolve(instance_id, descriptor),
         topic <- resolved.mod.subscriptions(descriptor, resolved.topics),
         into: %{} do
       {topic, descriptor}
@@ -296,26 +296,26 @@ defmodule Homex.Adapter.MQTT do
   @doc false
   @spec device_config(String.t(), %{Homex.Device.id() => Homex.Device.t()}, Homex.Device.t()) ::
           map()
-  def device_config(node_id, devices, %Homex.Device{} = device) do
+  def device_config(instance_id, devices, %Homex.Device{} = device) do
     %{
       name: device.name,
-      identifiers: [Util.device_identifier(node_id, device)],
+      identifiers: [Util.device_identifier(instance_id, device)],
       manufacturer: device.manufacturer,
       model: device.model,
       serial_number: device.serial_number,
       sw_version: device.sw_version,
       hw_version: device.hw_version,
-      via_device: build_via_device(node_id, devices, device)
+      via_device: build_via_device(instance_id, devices, device)
     }
     |> compact()
   end
 
-  defp build_via_device(_node_id, _devices, %Homex.Device{via: nil}), do: nil
+  defp build_via_device(_instance_id, _devices, %Homex.Device{via: nil}), do: nil
 
-  defp build_via_device(node_id, devices, %Homex.Device{via: via}) do
+  defp build_via_device(instance_id, devices, %Homex.Device{via: via}) do
     case Map.fetch(devices, via) do
       {:ok, parent} ->
-        Util.device_identifier(node_id, parent)
+        Util.device_identifier(instance_id, parent)
 
       :error ->
         Logger.warning("device #{inspect(via)} referenced by :via is not defined, ignoring")
@@ -339,10 +339,10 @@ defmodule Homex.Adapter.MQTT do
   @impl GenServer
   def handle_info(
         {:homex, :state, %Homex.Descriptor{} = descriptor, values, changes},
-        %__MODULE__{node_id: node_id, emqtt_pid: emqtt_pid, connected: true} = state
+        %__MODULE__{instance_id: instance_id, emqtt_pid: emqtt_pid, connected: true} = state
       )
       when not is_nil(emqtt_pid) do
-    if resolved = resolve(node_id, descriptor) do
+    if resolved = resolve(instance_id, descriptor) do
       opts = [retain: descriptor.transport[:mqtt][:retain]]
 
       for {topic, payload} <- resolved.mod.publish(descriptor, resolved.topics, values, changes) do
@@ -371,7 +371,7 @@ defmodule Homex.Adapter.MQTT do
     # will only yield one descriptor per topic because the topic includes the identifier
     with %Homex.Descriptor{} = descriptor <- subscriptions[topic],
          command when not is_nil(command) <- normalize(descriptor, payload) do
-      Homex.Entity.send_command(descriptor.name, command)
+      Homex.Entity.send_command(descriptor.id, command)
     end
 
     {:noreply, state}

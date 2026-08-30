@@ -18,7 +18,7 @@ Logger.configure(level: :info)
 
 ```elixir
 defmodule MySwitch do
-  use Homex.Entity.Switch, name: "Pump Relay"
+  use Homex.Entity.Switch, id: :relay, name: "Pump Relay"
 
   def handle_on(entity) do
     IO.puts("Relay turned on")
@@ -33,6 +33,7 @@ end
 
 defmodule MyTemperature do
   use Homex.Entity.Sensor,
+    id: :bme280_temp,
     name: "Outside Temperature",
     unit_of_measurement: "°C",
     device_class: "temperature"
@@ -49,6 +50,7 @@ end
 
 defmodule MyHumidity do
   use Homex.Entity.Sensor,
+    id: :bme280_hum,
     name: "Outside Humidity",
     unit_of_measurement: "%",
     device_class: "humidity"
@@ -64,7 +66,7 @@ defmodule MyHumidity do
 end
 
 defmodule MyButton do
-  use Homex.Entity.Button, name: "Open Door"
+  use Homex.Entity.Button, id: :gpio17, name: "Open Door"
 
   def handle_press(entity) do
     IO.puts("my button was pressed")
@@ -73,7 +75,7 @@ defmodule MyButton do
 end
 
 defmodule MyLight do
-  use Homex.Entity.Light, name: "Lava Lamp", modes: [:brightness]
+  use Homex.Entity.Light, id: :ws2812, name: "Lava Lamp", modes: [:brightness]
 
   def handle_init(entity) do
     entity |> set_on() |> set_brightness(50)
@@ -86,11 +88,11 @@ defmodule MyLight do
 end
 
 defmodule MyDevice do
-  use Homex.Entity.DeviceTrigger, name: "Door Opened"
+  use Homex.Entity.DeviceTrigger, id: :reed_switch, name: "Door Opened"
 end
 
 defmodule MyCamera do
-  use Homex.Entity.Camera, name: "Front Door Surveillance"
+  use Homex.Entity.Camera, id: :ov2640, name: "Front Door Surveillance"
 
   def handle_init(entity) do
     :timer.send_interval(5_000, :snap)
@@ -110,7 +112,7 @@ end
 ```elixir
 {:ok, pid} =
   Homex.start_link(
-    node_id: "livebook",
+    id: "livebook",
     devices: [default: [name: "Livebook"]],
     adapters: [
       {Homex.Adapter.ESPHome, mdns: :system}
@@ -126,5 +128,5 @@ Homex.Livebook.new()
 ```
 
 ```elixir
-Homex.Entity.snapshot("Lava Lamp")
+Homex.Entity.snapshot(:bme280_temp)
 ```

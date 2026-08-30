@@ -22,7 +22,7 @@ defmodule Homex do
        name: Homex.EntityRegistry,
        keys: :unique,
        meta: [
-         node_id: config.node_id,
+         id: config.id,
          devices: config.devices,
          origin: config.origin
        ]},
@@ -53,7 +53,7 @@ defmodule Homex do
 
   ```elixir
   {Homex,
-   node_id: Homex.hostname(),
+   id: Homex.hostname(),
    adapters: [{Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]}],
    entities: [MyEntity]}
   ```
@@ -79,7 +79,7 @@ defmodule Homex do
 
   ```elixir
   defmodule MySwitch do
-    use Homex.Entity.Switch, name: "my-switch"
+    use Homex.Entity.Switch, id: :my_switch, name: "My Switch"
 
     def handle_on(state) do
       IO.puts("Switch turned on")
@@ -105,7 +105,7 @@ defmodule Homex do
         [
           ...,
           {Homex,
-           node_id: Homex.hostname(),
+           id: Homex.hostname(),
            adapters: [
              {Homex.Adapter.MQTT, broker: [host: "localhost", port: 1883]},
              {Homex.Adapter.ESPHome, mdns: :system}
@@ -140,15 +140,15 @@ defmodule Homex do
   end
 
   @doc """
-  The `:node_id` this instance was started with.
+  The `:id` this instance was started with.
 
   Adapters scope the identifiers they publish by it, so it is what keeps two
   homex instances on the same broker or network apart. Raises when Homex is not
   running.
   """
-  def node_id() do
-    case meta(:node_id, nil) do
-      nil -> raise "node id must be set"
+  def instance_id() do
+    case meta(:id, nil) do
+      nil -> raise "instance id must be set"
       id -> id
     end
   end
@@ -166,9 +166,9 @@ defmodule Homex do
   def origin(), do: meta(:origin, %{})
 
   @doc "The descriptor of one running entity"
-  @spec descriptor(String.t()) :: {:ok, Homex.Descriptor.t()} | {:error, :not_found}
-  def descriptor(name) do
-    case Registry.lookup(Homex.EntityRegistry, name) do
+  @spec descriptor(atom()) :: {:ok, Homex.Descriptor.t()} | {:error, :not_found}
+  def descriptor(id) do
+    case Registry.lookup(Homex.EntityRegistry, id) do
       [{_pid, descriptor}] -> {:ok, descriptor}
       _ -> {:error, :not_found}
     end
@@ -180,8 +180,8 @@ defmodule Homex do
   end
 
   @doc "send a message to the entity"
-  def notify(name, msg) do
-    case Registry.lookup(Homex.EntityRegistry, name) do
+  def notify(id, msg) do
+    case Registry.lookup(Homex.EntityRegistry, id) do
       [{pid, _value}] ->
         send(pid, msg)
         :ok
@@ -192,16 +192,16 @@ defmodule Homex do
   end
 
   @doc "wraps `GenServer.cast/2` for the entity"
-  def cast(name, msg) do
-    case Registry.lookup(Homex.EntityRegistry, name) do
+  def cast(id, msg) do
+    case Registry.lookup(Homex.EntityRegistry, id) do
       [{pid, _value}] -> GenServer.cast(pid, msg)
       _ -> {:error, :not_found}
     end
   end
 
   @doc "wraps `GenServer.call/2` for the entity"
-  def call(name, msg) do
-    case Registry.lookup(Homex.EntityRegistry, name) do
+  def call(id, msg) do
+    case Registry.lookup(Homex.EntityRegistry, id) do
       [{pid, _value}] -> call_entity(pid, msg)
       _ -> {:error, :not_found}
     end
@@ -315,9 +315,9 @@ defmodule Homex do
   end
 
   @doc "Stops the entity and tells the adapters to republish"
-  @spec remove_entity(String.t()) :: :ok | {:error, :not_found}
-  def remove_entity(name) do
-    case Registry.lookup(Homex.EntityRegistry, name) do
+  @spec remove_entity(atom()) :: :ok | {:error, :not_found}
+  def remove_entity(id) do
+    case Registry.lookup(Homex.EntityRegistry, id) do
       [{pid, _descriptor}] ->
         :ok = GenServer.call(pid, {:homex, :remove})
         notify_entities_changed()

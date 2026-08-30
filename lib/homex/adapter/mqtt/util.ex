@@ -11,16 +11,16 @@ defmodule Homex.Adapter.MQTT.Util do
   entity as a new one and the old one goes stale.
   """
 
-  def component_identifier(node_id, %Descriptor{name: name})
-      when is_binary(name) and is_binary(node_id) do
-    hash = :erlang.phash2([name, node_id])
-    "homex-#{slug(node_id)}-#{slug(name)}-#{hash}"
+  def component_identifier(instance_id, %Descriptor{id: id})
+      when is_atom(id) and is_binary(instance_id) do
+    hash = :erlang.phash2([id, instance_id])
+    "homex-#{slug(instance_id)}-#{slug(to_string(id))}-#{hash}"
   end
 
-  # HA identifies a device by its identifiers, so they are scoped by the node id —
-  # unique per homex instance, stable across renames of the device itself.
-  def device_identifier(node_id, %Device{id: id}) when is_binary(node_id) do
-    "homex-#{slug(node_id)}-#{id}"
+  # HA identifies a device by its identifiers, so they are scoped by the instance
+  # id — unique per homex instance, stable across renames of the device itself.
+  def device_identifier(instance_id, %Device{id: id}) when is_binary(instance_id) do
+    "homex-#{slug(instance_id)}-#{id}"
   end
 
   @doc """
@@ -34,8 +34,8 @@ defmodule Homex.Adapter.MQTT.Util do
   @type topic_builder() :: ([String.t()] -> String.t())
 
   @spec identity(String.t(), Descriptor.t()) :: {String.t(), topic_builder()}
-  def identity(node_id, %Descriptor{kind: kind} = descriptor) do
-    identifier = component_identifier(node_id, descriptor)
+  def identity(instance_id, %Descriptor{kind: kind} = descriptor) do
+    identifier = component_identifier(instance_id, descriptor)
     {identifier, &topic(["homex", kind, identifier], &1)}
   end
 

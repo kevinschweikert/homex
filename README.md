@@ -66,7 +66,7 @@ Define a module for the type of entity you want to use
 
 ```elixir
 defmodule MySwitch do
-  use Homex.Entity.Switch, name: "my-switch"
+  use Homex.Entity.Switch, id: :my_switch, name: "My Switch"
 
   def handle_on(entity) do
     IO.puts("Switch turned on")
@@ -98,7 +98,7 @@ defmodule MyApp.Application do
       [
         ...,
         {Homex,
-         node_id: Homex.hostname(),
+         id: Homex.hostname(),
          adapters: [
            {Homex.Adapter.MQTT,
             broker: [host: "localhost", port: 1883, username: "admin", password: "admin"]},

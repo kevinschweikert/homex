@@ -35,7 +35,7 @@ defmodule Homex.Adapter.ESPHome do
   Start the adapter from the `:adapters` option of `Homex`:
 
       {Homex,
-       node_id: Homex.hostname(),
+       id: Homex.hostname(),
        adapters: [{Homex.Adapter.ESPHome, mdns: :system}],
        entities: [MySwitch]}
 
@@ -62,7 +62,7 @@ defmodule Homex.Adapter.ESPHome do
 
   ## Device limitations
 
-    * `:node_id` gives the device name. The `:default` `Homex.Device` gives the
+    * `:id` gives the device name. The `:default` `Homex.Device` gives the
       friendly name, the manufacturer and the model.
     * All other devices become flat sub-devices. The native API does not have a
       `:via` chain.

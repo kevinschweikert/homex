@@ -47,7 +47,7 @@ defmodule Homex.Entity.Camera do
 
   ```elixir
   defmodule MyCamera do
-    use Homex.Entity.Camera, name: "my-camera"
+    use Homex.Entity.Camera, id: :my_camera, name: "My Camera"
 
     def handle_init(entity) do
       :timer.send_interval(10_000, :snap)

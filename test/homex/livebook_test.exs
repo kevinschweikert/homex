@@ -4,11 +4,11 @@ defmodule Homex.LivebookTest do
   import Kino.Test
 
   defmodule TestSwitch do
-    use Homex.Entity.Switch, name: "dash-switch"
+    use Homex.Entity.Switch, id: :dash_switch, name: "Dash Switch"
   end
 
   defmodule TestLight do
-    use Homex.Entity.Light, name: "dash-light", modes: [:brightness]
+    use Homex.Entity.Light, id: :dash_light, name: "Dash Light", modes: [:brightness]
   end
 
   setup :configure_livebook_bridge
@@ -20,16 +20,17 @@ defmodule Homex.LivebookTest do
     end
 
     kino = Homex.Livebook.new()
-    cards = connect(kino).devices |> Enum.flat_map(& &1.cards) |> Map.new(&{&1.name, &1})
+    cards = connect(kino).devices |> Enum.flat_map(& &1.cards) |> Map.new(&{&1.id, &1})
 
     %{kino: kino, cards: cards}
   end
 
-  defp command(kino, name, cmd), do: push_event(kino, "command", %{"name" => name, "cmd" => cmd})
+  defp command(kino, id, cmd), do: push_event(kino, "command", %{"id" => id, "cmd" => cmd})
 
   test "a card carries every key the browser expects", %{cards: cards} do
-    assert cards["dash-switch"] == %{
-             name: "dash-switch",
+    assert cards["dash_switch"] == %{
+             id: "dash_switch",
+             name: "Dash Switch",
              icon: "🔌",
              value: "off",
              unit: nil,
@@ -42,20 +43,20 @@ defmodule Homex.LivebookTest do
              slider: nil
            }
 
-    assert cards["dash-light"].slider == %{field: "brightness"}
+    assert cards["dash_light"].slider == %{field: "brightness"}
   end
 
   test "a command reaches the entity, and an unknown field is ignored", %{kino: kino} do
-    command(kino, "dash-switch", %{"state" => true, "not-a-field" => 1})
+    command(kino, "dash_switch", %{"state" => true, "not-a-field" => 1})
 
-    assert_receive {:homex, :state, %Descriptor{name: "dash-switch"}, _, %{state: true}}
+    assert_receive {:homex, :state, %Descriptor{id: :dash_switch}, _, %{state: true}}
     assert Process.alive?(kino.pid)
   end
 
   test "brightness is clamped before it reaches the entity", %{kino: kino} do
-    command(kino, "dash-light", %{"brightness" => 500})
+    command(kino, "dash_light", %{"brightness" => 500})
 
-    assert_receive {:homex, :state, %Descriptor{name: "dash-light"}, _, %{brightness: 100}}
+    assert_receive {:homex, :state, %Descriptor{id: :dash_light}, _, %{brightness: 100}}
   end
 
   test "a command for an unknown entity is ignored", %{kino: kino} do
