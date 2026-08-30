@@ -27,13 +27,17 @@ def deps do
     {:homex, "~> 0.1.2"},
     # for the MQTT adapter
     {:emqtt, "~> 1.14.7"},
+    # for the ESPHome adapter
+    {:espex, "~> 0.9"},
+    # to advertise the ESPHome adapter over mDNS
+    {:mdns_lite, "~> 0.8"},
     # for the Livebook dashboard
     {:kino, "~> 0.19"}
   ]
 end
 ```
 
-Homex pulls in neither on its own — add the ones for the adapters you use.
+Homex pulls in none of these on its own. Add the ones for the adapters you use.
 
 To build `emqtt` without QUIC support, and skip the `quicer` NIF compilation:
 

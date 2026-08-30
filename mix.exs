@@ -55,6 +55,12 @@ defmodule Homex.MixProject do
       extras: ["README.md", "CHANGELOG.md"],
       assets: %{"assets" => "assets"},
       groups_for_modules: [
+        Core: [
+          Homex,
+          Homex.Config,
+          Homex.Device,
+          Homex.Descriptor
+        ],
         Entities: [
           Homex.Entity,
           Homex.Entity.Switch,
@@ -64,15 +70,12 @@ defmodule Homex.MixProject do
           Homex.Entity.Button,
           Homex.Entity.DeviceTrigger
         ],
+        Adapters: [
+          Homex.Adapter.MQTT,
+          Homex.Adapter.ESPHome
+        ],
         Livebook: [
           Homex.Livebook
-        ],
-        MQTT: [
-          Homex.Adapter.MQTT,
-          Homex.Adapter.MQTT.Util
-        ],
-        ESPHome: [
-          Homex.Adapter.ESPHome
         ]
       ]
     ]

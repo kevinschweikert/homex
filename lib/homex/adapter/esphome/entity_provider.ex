@@ -7,9 +7,6 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
   alias Homex.Adapter.ESPHome.{Button, Platform, Sensor, Switch, Light, Camera}
   alias Homex.Descriptor
 
-  # TODO:
-  # - support devices
-
   @platforms %{
     switch: Switch,
     sensor: Sensor,
@@ -25,8 +22,7 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
     for {module, descriptor} <- supported(), do: Platform.list_entity(module, descriptor)
   end
 
-  # an entity that exited since the lookup has no snapshot left to advertise, and a
-  # button has no state frame at all
+  # an entity can exit after the lookup, and a button has no state frame
   @impl Espex.EntityProvider
   def initial_states do
     for {module, descriptor} <- supported(),
@@ -35,8 +31,7 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
         do: frame
   end
 
-  # the entity owns the state, so a command is only delivered to it — the state
-  # frame follows from the `:homex, :state` broadcast its commit emits
+  # the entity owns the state, so its commit broadcast sends the state frame
   @impl Espex.EntityProvider
   def handle_command(%{key: key} = request) do
     with {module, %Descriptor{} = descriptor} <- entity_for_key(key),
@@ -64,11 +59,10 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
     {:noreply, server}
   end
 
-  # espex caches `list_entities/0` per connection, so an added or removed entity
-  # only reaches a client on reconnect. Nothing to do for `:entities_changed`
+  # `Reloader` handles `:entities_changed` and `:devices_changed`
   def handle_info(_msg, server), do: {:noreply, server}
 
-  # the entities this adapter can serve, each paired with the platform serving it
+  # the entities this adapter can serve, with their platform
   defp supported do
     for %Descriptor{kind: kind} = descriptor <- Homex.descriptors(),
         module = @platforms[kind],

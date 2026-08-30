@@ -4,20 +4,20 @@ defmodule Homex.Adapter.ESPHome do
                       required: false,
                       type: :integer,
                       default: 6053,
-                      doc: "TCP port the native API listens on"
+                      doc: "The TCP port that the native API uses."
                     ],
                     mdns: [
                       required: false,
                       type: :atom,
                       doc:
-                        "an `Espex.Mdns` adapter, such as `Espex.Mdns.MdnsLite`. Without one the instance is not advertised and has to be added to Home Assistant by address"
+                        "An `Espex.Mdns` adapter, for example `Espex.Mdns.MdnsLite`. If you do not set this option, homex does not advertise the instance. You must then add the device to Home Assistant by its address."
                     ],
                     espex_opts: [
                       required: false,
                       default: [],
                       type: :keyword_list,
                       doc:
-                        "passed to `Espex` untouched and merged last, so it can override anything derived from the options above. A nested list such as `:device_config` is merged one level deep, so setting a key in it does not drop the ones homex derived. Unvalidated — the accepted keys are espex's, not homex's"
+                        "Options for `Espex`. Homex merges them last. They replace the values from the options above. Homex merges a nested list, for example `:device_config`, one level deep. Because of this, a key that you set does not remove the keys that homex made. Homex does not validate these options, because espex accepts them."
                     ]
                   ]
                   |> NimbleOptions.new!()
@@ -25,38 +25,45 @@ defmodule Homex.Adapter.ESPHome do
   @moduledoc """
   ESPHome native API transport.
 
-  Home Assistant talks to homex as if it were an ESPHome device: it connects over
-  the native API, reads the entities and subscribes to their state. The `:node_id`
-  becomes the device name it discovers.
+  Home Assistant discovers homex as an ESPHome device. It then connects to homex
+  with the native API.
 
-  Requires `:espex`, which homex does not pull in on its own, plus `:mdns_lite` for
-  the `:mdns` option below — `Espex.Mdns.MdnsLite` late-binds it, so espex does not
-  pull it in either:
+  This adapter needs `:espex`. The `:mdns` option also needs `:mdns_lite`. Homex
+  does not include these dependencies.
 
       {:espex, "~> 0.9"},
       {:mdns_lite, "~> 0.8"}
 
-  `:mdns_lite` cannot be installed from a Livebook: it builds its DNS records with
-  `Record.extract/2` from `kernel/src/inet_dns.hrl`, and Livebook's bundled Erlang
-  ships no OTP source headers. Leave `:mdns` out there and add the device to Home
-  Assistant by address, as `example.livemd` does.
+  `:mdns_lite` does not operate in a Livebook. Do not set `:mdns` there. Add the
+  device to Home Assistant by its address.
 
-  Start it from the `:adapters` option of `Homex`:
+  Start the adapter from the `:adapters` option of `Homex`:
 
       {Homex,
        node_id: Homex.hostname(),
        adapters: [{Homex.Adapter.ESPHome, mdns: Espex.Mdns.MdnsLite}],
        entities: [MySwitch]}
 
-  Anything espex takes that homex does not model goes through `:espex_opts`, for
-  example the pre-shared key of the encrypted transport:
+  Use `:espex_opts` for espex options that homex does not have:
 
       {Homex.Adapter.ESPHome, espex_opts: [device_config: [psk: "base64-encoded-psk"]]}
 
-  Only one instance can run per VM.
+  ## Device limitations
 
-  Home Assistant caches the entity list per connection, so an entity added or
-  removed at runtime only reaches it on reconnect.
+    * `:node_id` gives the device name. The `:default` `Homex.Device` gives the
+      friendly name, the manufacturer and the model.
+    * All other devices become flat sub-devices. The native API does not have a
+      `:via` chain.
+    * The native API has no field for `:serial_number`, `:sw_version` or
+      `:hw_version`.
+    * espex reads the entity list and the device config when a client connects.
+      If you change one of them, the adapter restarts the espex tree. The restart
+      disconnects all clients.
+
+  ## Instance limitations
+
+  You can run only one instance for each VM. espex calls the entity provider by
+  its module name. Because of this, the name is the same for all instances.
 
   ## Options
 
@@ -65,44 +72,20 @@ defmodule Homex.Adapter.ESPHome do
 
   use Supervisor
 
-  alias Homex.Adapter.ESPHome.EntityProvider
-
-  # espex calls EntityProvider as a bare module, so this adapter is a singleton
-  @server __MODULE__.Server
-  @supervisor __MODULE__.Supervisor
+  alias Homex.Adapter.ESPHome.{EspexTree, Reloader}
 
   def start_link(opts \\ []) do
-    Supervisor.start_link(__MODULE__, NimbleOptions.validate!(opts, @options_schema),
-      name: __MODULE__
-    )
+    opts = NimbleOptions.validate!(opts, @options_schema)
+    Supervisor.start_link(__MODULE__, opts)
   end
 
   @impl Supervisor
   def init(opts) do
     children = [
-      {EntityProvider, server: @server},
-      {Espex, espex_opts(opts)}
+      {Reloader, supervisor: self()},
+      {EspexTree, opts}
     ]
 
-    Supervisor.init(children, strategy: :rest_for_one)
-  end
-
-  defp espex_opts(opts) do
-    [
-      name: @supervisor,
-      server_name: @server,
-      entity_provider: EntityProvider,
-      port: opts[:port],
-      mdns: opts[:mdns],
-      device_config: [name: Homex.node_id()]
-    ]
-    |> Keyword.reject(fn {_key, val} -> is_nil(val) end)
-    |> Keyword.merge(opts[:espex_opts], &merge_nested/3)
-  end
-
-  defp merge_nested(_key, derived, override) do
-    if Keyword.keyword?(derived) and Keyword.keyword?(override),
-      do: Keyword.merge(derived, override),
-      else: override
+    Supervisor.init(children, strategy: :one_for_one)
   end
 end

@@ -1,4 +1,6 @@
 defmodule Homex.Adapter.MQTT.Util do
+  @moduledoc false
+
   import Homex.Util, only: [slug: 1]
 
   alias Homex.Descriptor

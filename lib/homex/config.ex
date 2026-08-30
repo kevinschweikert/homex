@@ -6,14 +6,14 @@ defmodule Homex.Config do
                    node_id: [
                      required: true,
                      type: :string,
-                     doc: "identifies this Homex instance for HA"
+                     doc: "Identifies this homex instance to Home Assistant."
                    ],
                    devices: [
                      required: false,
                      default: [],
                      type: :keyword_list,
                      doc:
-                       "Devices this node exposes, keyed by id, with the options from `Homex.Device`. The `:default` device is always present and takes its name from the hostname unless configured."
+                       "The devices this node exposes, keyed by id. `Homex.Device` lists the options for each one. The `:default` device is always present. It uses the hostname as its name if you do not set one."
                    ],
                    origin: [
                      required: false,
@@ -24,20 +24,18 @@ defmodule Homex.Config do
                          required: false,
                          type: :string,
                          default: "homex",
-                         doc:
-                           "The name of the application that is the origin of the discovered MQTT item."
+                         doc: "The name of the application that supplies the entities."
                        ],
                        sw_version: [
                          required: false,
                          type: :string,
                          doc:
-                           "Software version of the application that supplies the discovered MQTT item"
+                           "The software version of the application that supplies the entities."
                        ],
                        support_url: [
                          required: false,
                          type: :string,
-                         doc:
-                           "Support URL of the application that supplies the discovered MQTT item"
+                         doc: "The support URL of the application that supplies the entities."
                        ]
                      ]
                    ],
@@ -51,7 +49,7 @@ defmodule Homex.Config do
                      default: [],
                      type: {:list, {:or, [:atom, {:tuple, [:atom, :keyword_list]}]}},
                      doc:
-                       "Transports to start, as `module` or `{module, opts}`. Each adapter documents its own options — see `Homex.Adapter.MQTT`. With none given the entities still run, they are just not published anywhere."
+                       "The transports to start, as `module` or `{module, opts}`. Each adapter has its own options. See `Homex.Adapter.MQTT` and `Homex.Adapter.ESPHome`. If you give no adapter, the entities still run, but homex does not publish them."
                    ]
                  ]
                  |> NimbleOptions.new!()

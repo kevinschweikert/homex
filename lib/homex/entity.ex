@@ -1,27 +1,69 @@
 defmodule Homex.Entity do
   @moduledoc """
-  Defines the behaviour and struct for an entity, and the scaffolding for
-  authoring entity kinds.
+  The behaviour and the struct for an entity, and the scaffolding to add new
+  entity kinds.
 
-  An entity is backed by a single `module` that `use`s a kind such as
-  `Homex.Entity.Switch`. The kind supplies the required `c:validate/1`,
-  `c:describe/1`, `c:setup/1` and `c:handle_command/2` callbacks and generates
-  the module's own new/1 constructor. The module may implement the optional
-  handler callbacks (`handle_init`, `handle_info`, `handle_call`,
-  `handle_cast`) plus any kind-specific hooks like `handle_on/1`.
+  An entity is one module that does `use` on a kind, for example
+  `Homex.Entity.Switch`. The kind supplies the `c:validate/1`, `c:describe/1`,
+  `c:setup/1` and `c:handle_command/2` callbacks, and generates a `new/1`
+  constructor for the module.
 
-  ## Authoring a kind
+  Your module can implement the optional callbacks `handle_init/1`,
+  `handle_info/2`, `handle_call/2` and `handle_cast/2`. It can also implement the
+  hooks that the kind adds, for example `handle_on/1` on a switch.
 
-  `use Homex.Entity` adopts this behaviour and declares the optional handler
-  callbacks. The kind then writes its own `__using__/1` that splices in
-  `__entity__/3` — which generates `new/1`, delegates `setup`/`handle_command`,
-  and injects overridable identity defaults — alongside its own hook defaults.
-  `Homex.Entity.Sensor` (no hooks) and `Homex.Entity.Switch` (with hooks) are
-  the worked examples.
+  ## Adding a kind
 
-  A kind reaches a hook with a plain call, `entity.module.handle_on(entity)`,
-  which always resolves because those defaults are injected into every user
-  module; overrides can chain to them with `super/1`.
+  `use Homex.Entity` adopts this behaviour and declares the optional callbacks.
+  The kind then writes its own `__using__/1` that calls `__entity__/3`. That macro
+  generates `new/1`, delegates `setup/1` and `handle_command/2`, and adds an
+  overridable default for each optional callback.
+
+      defmodule MyApp.Counter do
+        use Homex.Entity
+
+        @opts_schema Homex.Entity.base_opts_schema() |> NimbleOptions.new!()
+
+        defmacro __using__(opts), do: Homex.Entity.__entity__(__MODULE__, opts, set_count: 2)
+
+        @impl Homex.Entity
+        def validate(opts), do: NimbleOptions.validate(opts, @opts_schema)
+
+        @impl Homex.Entity
+        def describe(opts) do
+          %Homex.Descriptor{
+            kind: :sensor,
+            name: opts[:name],
+            fields: %{state: :state},
+            options: %{},
+            transport: %{}
+          }
+        end
+
+        @impl Homex.Entity
+        def setup(%{module: module} = entity), do: module.handle_init(entity)
+
+        @impl Homex.Entity
+        def handle_command(_cmd, entity), do: entity
+
+        def set_count(entity, count), do: Homex.Entity.put_change(entity, :state, count)
+      end
+
+  A module that uses the kind gets `new/1`, the callback defaults, and the
+  functions in the import list of `__entity__/3`:
+
+      defmodule MyApp.Clicks do
+        use MyApp.Counter, name: "clicks"
+
+        def handle_info({:clicked, count}, entity), do: set_count(entity, count)
+      end
+
+  `Homex.Entity.Sensor` has no hooks. `Homex.Entity.Switch` has hooks. Use them as
+  the larger examples.
+
+  A kind calls a hook directly, for example `entity.module.handle_on(entity)`. The
+  call always resolves, because `__entity__/3` puts a default for each hook in the
+  module. An override can call the default with `super/1`.
   """
   use GenServer
 
@@ -195,7 +237,13 @@ defmodule Homex.Entity do
 
   ## Platform API
 
-  @doc false
+  @doc """
+  The options that every entity kind accepts.
+
+  A kind merges its own options into this list, then builds its schema from the
+  result.
+  """
+  @spec base_opts_schema() :: keyword()
   def base_opts_schema do
     [
       name: [required: true, type: :string, doc: "the name of the entity"],
@@ -208,7 +256,16 @@ defmodule Homex.Entity do
     ]
   end
 
-  @doc false
+  @doc """
+  Stages a value for one field of the entity.
+
+  Homex commits the staged values after your callback returns, then publishes the
+  fields that changed. It ignores a key that the `:fields` of the
+  `Homex.Descriptor` do not list.
+
+  A kind wraps this function in a helper, for example
+  `Homex.Entity.Sensor.set_value/2`.
+  """
   @spec put_change(t(), atom(), term()) :: t()
   def put_change(
         %__MODULE__{changes: changes, descriptor: %Homex.Descriptor{fields: fields}} = entity,
@@ -248,9 +305,6 @@ defmodule Homex.Entity do
   end
 
   ## Process lifecycle
-
-  def via(name), do: {:via, Registry, {Homex.EntityRegistry, name}}
-  def via(name, meta), do: {:via, Registry, {Homex.EntityRegistry, name, meta}}
 
   def child_spec(%__MODULE__{} = entity) do
     %{
