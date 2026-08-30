@@ -58,7 +58,18 @@ defmodule Homex.Adapter.MQTT do
 
   require Logger
 
-  alias Homex.Adapter.MQTT.{Button, Camera, DeviceTrigger, Light, Sensor, Switch, Util}
+  alias Homex.Adapter.MQTT.{
+    Button,
+    Camera,
+    DeviceTrigger,
+    Light,
+    Number,
+    Select,
+    Sensor,
+    Switch,
+    Util,
+    Text
+  }
 
   @platforms %{
     switch: Switch,
@@ -66,7 +77,10 @@ defmodule Homex.Adapter.MQTT do
     button: Button,
     light: Light,
     camera: Camera,
-    device_trigger: DeviceTrigger
+    device_trigger: DeviceTrigger,
+    text: Text,
+    number: Number,
+    select: Select
   }
 
   defstruct [
