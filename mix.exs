@@ -68,7 +68,10 @@ defmodule Homex.MixProject do
           Homex.Entity.Light,
           Homex.Entity.Camera,
           Homex.Entity.Button,
-          Homex.Entity.DeviceTrigger
+          Homex.Entity.DeviceTrigger,
+          Homex.Entity.Text,
+          Homex.Entity.Number,
+          Homex.Entity.Select
         ],
         Adapters: [
           Homex.Adapter.MQTT,

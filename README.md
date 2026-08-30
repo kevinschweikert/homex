@@ -61,6 +61,9 @@ Supported entity types:
 - Camera
 - Button
 - DeviceTrigger
+- Text
+- Number
+- Select
 
 Define a module for the type of entity you want to use
 

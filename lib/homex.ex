@@ -75,6 +75,9 @@ defmodule Homex do
   - `Homex.Entity.Button`
   - `Homex.Entity.DeviceTrigger`
   - `Homex.Entity.Camera`
+  - `Homex.Entity.Text`
+  - `Homex.Entity.Number`
+  - `Homex.Entity.Select`
 
 
   ```elixir
