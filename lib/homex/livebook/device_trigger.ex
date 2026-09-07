@@ -7,7 +7,7 @@ defmodule Homex.Livebook.DeviceTrigger do
 
   @impl Kind
   def card(_descriptor, _values, changes) do
-    %{icon: "⚡", buttons: [%{label: "Trigger", cmd: %{trigger: true}}]}
+    %{icon: "⚡", controls: [%{type: :button, label: "Trigger", cmd: %{trigger: true}}]}
     |> Map.merge(Kind.fired(changes[:trigger], "device trigger"))
   end
 end

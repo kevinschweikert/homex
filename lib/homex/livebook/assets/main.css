@@ -126,6 +126,18 @@
   accent-color: #f59e0b
 }
 
+.input,
+.select {
+  font: inherit;
+  color: inherit;
+  flex: 1;
+  min-width: 100px;
+  padding: .35rem .6rem;
+  border: 1px solid rgba(127, 127, 127, .3);
+  border-radius: 6px;
+  background: rgba(127, 127, 127, .08)
+}
+
 .toggle {
   appearance: none;
   margin: 0;

@@ -9,17 +9,29 @@ defmodule Homex.Livebook.Kind do
     on: false,
     brightness: nil,
     flash: false,
-    buttons: [],
-    toggle: nil,
-    slider: nil
+    controls: []
   }
 
   @typedoc """
   What a kind renders, as far as it differs from `#{inspect(Map.keys(@defaults))}`.
 
-  `buttons` is a list of `%{label: String.t(), cmd: map()}`, `toggle` and
-  `slider` are `%{field: String.t()}` naming a boolean and a 0..100 field.
+  `controls` is the list of widgets the browser draws, in order, each a
+  `%{type: type}` naming what it is plus whatever that type needs:
+
+    * `:button` — `%{label: String.t(), cmd: map()}`
+    * `:toggle` — `%{field: String.t()}` naming a boolean field
+    * `:slider` — `%{field: String.t(), value: number(), min: number(),
+      max: number(), step: number()}`
+    * `:input` — `%{field: String.t(), value: term(), kind: :text | :password
+      | :number}`, plus `min`/`max`/`step` for a `:number` input and
+      `maxlength` for a `:text`/`:password` one
+    * `:select` — `%{field: String.t(), value: String.t(), options:
+      [String.t()]}`
+
+  A control's `field` is what a change on it sends back as `%{field =>
+  value}`, matched against the entity's own command fields on the way in.
   """
+  @type control() :: map()
   @type card() :: map()
 
   @doc """

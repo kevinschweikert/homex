@@ -6,6 +6,13 @@ defmodule Homex.Livebook.Switch do
   @behaviour Kind
 
   @impl Kind
-  def card(_descriptor, %{state: on?}, _changes),
-    do: %{icon: "🔌", value: Kind.onoff(on?), on: on?, sub: "switch", toggle: %{field: "state"}}
+  def card(_descriptor, %{state: on?}, _changes) do
+    %{
+      icon: "🔌",
+      value: Kind.onoff(on?),
+      on: on?,
+      sub: "switch",
+      controls: [%{type: :toggle, field: "state"}]
+    }
+  end
 end

@@ -7,7 +7,7 @@ defmodule Homex.Livebook.Button do
 
   @impl Kind
   def card(_descriptor, _values, changes) do
-    %{icon: "🔘", buttons: [%{label: "Press", cmd: %{pressed: true}}]}
+    %{icon: "🔘", controls: [%{type: :button, label: "Press", cmd: %{pressed: true}}]}
     |> Map.merge(Kind.fired(changes[:pressed], "button"))
   end
 end

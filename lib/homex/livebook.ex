@@ -9,7 +9,18 @@ if Code.ensure_loaded?(Kino.JS) do
     use Kino.JS, assets_path: "lib/homex/livebook/assets"
     use Kino.JS.Live
 
-    alias Homex.Livebook.{Button, Camera, DeviceTrigger, Kind, Light, Sensor, Switch}
+    alias Homex.Livebook.{
+      Button,
+      Camera,
+      DeviceTrigger,
+      Kind,
+      Light,
+      Number,
+      Select,
+      Sensor,
+      Switch,
+      Text
+    }
 
     @kinds %{
       switch: Switch,
@@ -17,7 +28,10 @@ if Code.ensure_loaded?(Kino.JS) do
       light: Light,
       button: Button,
       camera: Camera,
-      device_trigger: DeviceTrigger
+      device_trigger: DeviceTrigger,
+      text: Text,
+      number: Number,
+      select: Select
     }
 
     @doc "Starts the dashboard"

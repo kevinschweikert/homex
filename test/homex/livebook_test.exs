@@ -38,12 +38,13 @@ defmodule Homex.LivebookTest do
              on: false,
              brightness: nil,
              flash: false,
-             buttons: [],
-             toggle: %{field: "state"},
-             slider: nil
+             controls: [%{type: :toggle, field: "state"}]
            }
 
-    assert cards["dash_light"].slider == %{field: "brightness"}
+    assert cards["dash_light"].controls == [
+             %{type: :toggle, field: "state"},
+             %{type: :slider, field: "brightness", value: 0, min: 0, max: 100, step: 1}
+           ]
   end
 
   test "a command reaches the entity, and an unknown field is ignored", %{kino: kino} do
