@@ -64,6 +64,7 @@ Supported entity types:
 - Text
 - Number
 - Select
+- MediaPlayer (ESPHome adapter only, because Home Assistant has no MQTT media player)
 
 Define a module for the type of entity you want to use
 
