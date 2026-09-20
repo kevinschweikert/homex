@@ -13,7 +13,8 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
     Camera,
     Text,
     Number,
-    Select
+    Select,
+    MediaPlayer
   }
 
   alias Homex.Descriptor
@@ -26,7 +27,8 @@ defmodule Homex.Adapter.ESPHome.EntityProvider do
     camera: Camera,
     text: Text,
     number: Number,
-    select: Select
+    select: Select,
+    media_player: MediaPlayer
   }
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)

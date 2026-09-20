@@ -71,7 +71,8 @@ defmodule Homex.MixProject do
           Homex.Entity.DeviceTrigger,
           Homex.Entity.Text,
           Homex.Entity.Number,
-          Homex.Entity.Select
+          Homex.Entity.Select,
+          Homex.Entity.MediaPlayer
         ],
         Adapters: [
           Homex.Adapter.MQTT,
