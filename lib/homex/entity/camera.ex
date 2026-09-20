@@ -88,7 +88,7 @@ defmodule Homex.Entity.Camera do
   def describe(opts) do
     %Homex.Descriptor{
       kind: :camera,
-      fields: %{image: :state, attrs: :state},
+      fields: %{image: :event, attrs: :state},
       name: opts[:name],
       options: %{
         encoding: opts[:encoding],
