@@ -288,6 +288,17 @@ defmodule Homex.Entity do
     end
   end
 
+  @doc "Returns a boolean if the committed value is different from the given value"
+  @spec changed?(t(), atom(), term()) :: boolean()
+  def changed?(
+        %__MODULE__{values: values, descriptor: %Homex.Descriptor{fields: fields}},
+        key,
+        value
+      )
+      when is_atom(key) do
+    fields[key] == :event or values[key] != value
+  end
+
   @doc false
   @spec execute_change(t()) :: t()
   def execute_change(

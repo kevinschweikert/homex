@@ -7,18 +7,19 @@ defmodule Homex.Livebook.Light do
 
   @impl Kind
   def card(%{options: %{modes: modes}}, %{state: on?} = values, _changes) do
-    brightness = values[:brightness]
+    # the browser works in percent, the entity in 0..1
+    percent = values[:brightness] && values[:brightness] * 100
 
     slider =
       if :brightness in modes,
-        do: %{type: :slider, field: "brightness", value: brightness, min: 0, max: 100, step: 1}
+        do: %{type: :slider, field: "brightness", value: percent, min: 0, max: 100, step: 1}
 
     %{
       icon: "💡",
       value: Kind.onoff(on?),
       on: on?,
-      brightness: brightness,
-      sub: if(brightness, do: "brightness #{round(brightness)}%", else: "light"),
+      brightness: percent,
+      sub: if(percent, do: "brightness #{round(percent)}%", else: "light"),
       controls: [%{type: :toggle, field: "state"}, slider] |> Enum.reject(&is_nil/1)
     }
   end

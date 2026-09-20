@@ -43,7 +43,7 @@ defmodule Homex.LivebookTest do
 
     assert cards["dash_light"].controls == [
              %{type: :toggle, field: "state"},
-             %{type: :slider, field: "brightness", value: 0, min: 0, max: 100, step: 1}
+             %{type: :slider, field: "brightness", value: 0.0, min: 0, max: 100, step: 1}
            ]
   end
 
@@ -57,7 +57,7 @@ defmodule Homex.LivebookTest do
   test "brightness is clamped before it reaches the entity", %{kino: kino} do
     command(kino, "dash_light", %{"brightness" => 500})
 
-    assert_receive {:homex, :state, %Descriptor{id: :dash_light}, _, %{brightness: 100}}
+    assert_receive {:homex, :state, %Descriptor{id: :dash_light}, _, %{brightness: 1.0}}
   end
 
   test "a command for an unknown entity is ignored", %{kino: kino} do

@@ -102,12 +102,14 @@ if Code.ensure_loaded?(Kino.JS) do
     # entity itself declares, matched as strings so no atom is built from input
     defp command(%Homex.Descriptor{fields: fields}, cmd) do
       for {field, _kind} <- fields, str = to_string(field), Map.has_key?(cmd, str), into: %{} do
-        {field, clamp(str, cmd[str])}
+        {field, normalize(str, cmd[str])}
       end
     end
 
-    defp clamp("brightness", value) when is_number(value), do: value |> max(0) |> min(100)
-    defp clamp(_field, value), do: value
+    defp normalize("brightness", value) when is_number(value),
+      do: value |> max(0) |> min(100) |> Kernel./(100)
+
+    defp normalize(_field, value), do: value
 
     # a layout event rebuilds the browser from scratch, dropping the images with it
     defp relayout(ctx) do
