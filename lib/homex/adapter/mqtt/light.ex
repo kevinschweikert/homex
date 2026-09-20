@@ -18,7 +18,7 @@ defmodule Homex.Adapter.MQTT.Light do
       supported_color_modes: color_modes(modes)
     }
 
-    if :brightness in modes, do: Map.put(base, :brightness, true), else: base
+    if :brightness in modes or :rgb in modes, do: Map.put(base, :brightness, true), else: base
   end
 
   @impl Homex.Adapter.MQTT.Platform
@@ -44,18 +44,41 @@ defmodule Homex.Adapter.MQTT.Light do
 
       state ->
         payload =
-          maybe_put(%{"state" => state}, "brightness", values[:brightness], &wire_brightness/1)
+          %{"state" => state}
+          |> maybe_put("brightness", values[:brightness], &wire_brightness/1)
+          |> put_color(values[:mode], values[:color])
 
         [{topics.state, Homex.encode!(payload)}]
     end
   end
 
-  defp color_modes(modes), do: if(:brightness in modes, do: ["brightness"], else: ["onoff"])
+  # ha rejects onoff or brightness alongside a real colour mode, so only the
+  # richest one is advertised
+  defp color_modes(modes) do
+    cond do
+      :rgb in modes -> ["rgb"]
+      :brightness in modes -> ["brightness"]
+      true -> ["onoff"]
+    end
+  end
+
+  defp put_color(payload, :rgb, {:rgb, r, g, b}) do
+    payload
+    |> Map.put("color_mode", "rgb")
+    |> Map.put("color", %{
+      "r" => wire_component(r),
+      "g" => wire_component(g),
+      "b" => wire_component(b)
+    })
+  end
+
+  defp put_color(payload, _mode, _color), do: payload
 
   defp from_wire(map) do
     %{}
     |> maybe_put(:state, map["state"], &core_state/1)
     |> maybe_put(:brightness, map["brightness"], &core_brightness/1)
+    |> maybe_put(:color, map["color"], &core_color/1)
   end
 
   defp maybe_put(map, _key, nil, _fun), do: map
@@ -71,14 +94,24 @@ defmodule Homex.Adapter.MQTT.Light do
   defp core_state("OFF"), do: false
   defp core_state(_), do: nil
 
-  defp core_brightness(value) when is_number(value),
-    do: value |> max(0) |> min(255) |> Kernel.*(100) |> Kernel./(255) |> Float.round(2)
-
+  defp core_brightness(value) when is_number(value), do: core_component(value)
   defp core_brightness(_), do: nil
+
+  defp core_color(%{"r" => r, "g" => g, "b" => b})
+       when is_number(r) and is_number(g) and is_number(b),
+       do: {:rgb, core_component(r), core_component(g), core_component(b)}
+
+  defp core_color(_), do: nil
+
+  # the payload comes off the wire, so it is clamped before it reaches a setter
+  # that raises outside 0..1
+  defp core_component(value),
+    do: value |> max(0) |> min(255) |> Kernel./(255) |> Float.round(4)
 
   defp wire_state(true), do: "ON"
   defp wire_state(false), do: "OFF"
   defp wire_state(_), do: nil
 
-  defp wire_brightness(value), do: round(value / 100 * 255)
+  defp wire_brightness(value), do: round(value * 255)
+  defp wire_component(value), do: round(value * 255)
 end
