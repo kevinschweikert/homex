@@ -281,7 +281,55 @@ defmodule Homex.Adapter.MQTT do
         Map.merge(acc, device_state.subscriptions)
       end)
 
-    {:noreply, %{state | subscriptions: subscriptions, devices: devices}}
+    {:noreply, %{state | subscriptions: subscriptions, devices: devices},
+     {:continue, :publish_states}}
+  end
+
+  # If HA has a button in state ON, homex boots, sets the button to OFF, this
+  # message is dropped if the adapter is offline.
+  #
+  # To make sure that the state known in Homex is pushed to HA, all states are
+  # announced here again.
+  def handle_continue(:publish_states, %__MODULE__{emqtt_pid: nil} = state) do
+    {:noreply, state}
+  end
+
+  def handle_continue(
+        :publish_states,
+        %__MODULE__{instance_id: instance_id, emqtt_pid: emqtt_pid} = state
+      ) do
+    for descriptor <- Homex.descriptors(),
+        values = Homex.Entity.snapshot(descriptor.id),
+        is_map(values),
+        values = compact(values),
+        message <- state_messages(instance_id, descriptor, values, values) do
+      publish_message(emqtt_pid, message)
+    end
+
+    {:noreply, state}
+  end
+
+  @doc false
+  @spec state_messages(String.t(), Homex.Descriptor.t(), map(), map()) ::
+          [{String.t(), binary(), keyword()}]
+  def state_messages(instance_id, %Homex.Descriptor{} = descriptor, values, changes) do
+    case resolve(instance_id, descriptor) do
+      nil ->
+        []
+
+      %{mod: mod, topics: topics} ->
+        opts = [retain: descriptor.transport[:mqtt][:retain]]
+
+        for {topic, payload} <- mod.publish(descriptor, topics, values, changes) do
+          {topic, payload, opts}
+        end
+    end
+  end
+
+  defp publish_message(emqtt_pid, {topic, payload, opts}) do
+    with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
+      Logger.debug("published #{inspect(payload)} to #{inspect(topic)}")
+    end
   end
 
   defp build_components(instance_id, entries) do
@@ -356,14 +404,8 @@ defmodule Homex.Adapter.MQTT do
         %__MODULE__{instance_id: instance_id, emqtt_pid: emqtt_pid, connected: true} = state
       )
       when not is_nil(emqtt_pid) do
-    if resolved = resolve(instance_id, descriptor) do
-      opts = [retain: descriptor.transport[:mqtt][:retain]]
-
-      for {topic, payload} <- resolved.mod.publish(descriptor, resolved.topics, values, changes) do
-        with :ok <- :emqtt.publish(emqtt_pid, topic, payload, opts) do
-          Logger.debug("published #{inspect(payload)} to #{inspect(topic)}")
-        end
-      end
+    for message <- state_messages(instance_id, descriptor, values, changes) do
+      publish_message(emqtt_pid, message)
     end
 
     {:noreply, state}
