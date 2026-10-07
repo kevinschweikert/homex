@@ -1,3 +1,5 @@
+# The ESPHome adapter needs the optional :espex dependency.
+if Code.ensure_loaded?(Espex) do
 defmodule Homex.Adapter.ESPHome.Mdns.SystemResponder do
   @moduledoc """
   An `Espex.Mdns` adapter that advertises through the mDNS responder of the
@@ -80,4 +82,5 @@ defmodule Homex.Adapter.ESPHome.Mdns.SystemResponder do
 
   defp instance_name(%{instance_name: name}) when is_binary(name), do: name
   defp instance_name(_service), do: Homex.instance_id()
+  end
 end

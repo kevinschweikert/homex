@@ -1,3 +1,5 @@
+# The ESPHome adapter needs the optional :espex dependency.
+if Code.ensure_loaded?(Espex) do
 defmodule Homex.Adapter.ESPHome.Light do
   @moduledoc false
 
@@ -85,4 +87,5 @@ defmodule Homex.Adapter.ESPHome.Light do
   # level is always full and the dimming is reported as brightness alone
   defp color({:rgb, r, g, b}), do: %{color_brightness: 1.0, red: r, green: g, blue: b}
   defp color(_), do: %{}
+  end
 end
