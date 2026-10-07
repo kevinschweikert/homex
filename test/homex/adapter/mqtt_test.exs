@@ -36,4 +36,26 @@ defmodule Homex.Adapter.MQTTTest do
     log = capture_log(fn -> refute device_config(:orphan)[:via_device] end)
     assert log =~ ":nowhere"
   end
+
+  describe "state_messages/4" do
+    test "a switch publishes its state on its state topic with the retain option" do
+      descriptor = descriptor(Homex.Entity.Switch, id: :test_switch, name: "Test")
+      values = %{state: false}
+
+      assert [{topic, "OFF", [retain: true]}] =
+               MQTT.state_messages("node", descriptor, values, values)
+
+      assert topic == "homex/switch/" <> MQTT.Util.component_identifier("node", descriptor)
+    end
+
+    test "an entity that holds no value publishes nothing" do
+      descriptor = descriptor(Homex.Entity.Sensor, id: :test_sensor, name: "Test")
+      assert MQTT.state_messages("node", descriptor, %{}, %{}) == []
+    end
+  end
+
+  defp descriptor(kind, opts) do
+    {:ok, validated} = kind.validate(opts)
+    %{kind.describe(validated) | id: validated[:id], device: validated[:device]}
+  end
 end
