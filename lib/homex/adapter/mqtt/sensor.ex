@@ -24,6 +24,9 @@ defmodule Homex.Adapter.MQTT.Sensor do
   def normalize(_payload), do: nil
 
   @impl Homex.Adapter.MQTT.Platform
+  def publish(_desc, topics, %{state: value}, _changes) when is_binary(value),
+    do: [{topics.state, value}]
+
   def publish(_desc, topics, %{state: value}, _changes),
     do: [{topics.state, Homex.encode!(value)}]
 
